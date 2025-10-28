@@ -2,6 +2,10 @@
 
 WorkOS AuthKit in a Capacitor mobile app with Next.js backend.
 
+https://github.com/user-attachments/assets/0222f0fb-cd62-4419-bf20-91fa8f8716fc
+
+
+
 ## Quick Start
 
 **1. Install dependencies**
