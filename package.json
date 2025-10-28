@@ -8,9 +8,14 @@
     "dev:backend": "pnpm -F backend dev",
     "dev:app": "pnpm -F capacitor-app dev",
     "build": "pnpm -r build",
+    "build:backend": "pnpm -F backend build",
+    "build:app": "pnpm -F capacitor-app build",
     "sync": "pnpm -F capacitor-app sync",
     "sync:ios": "pnpm -F capacitor-app sync:ios",
-    "sync:android": "pnpm -F capacitor-app sync:android"
+    "sync:android": "pnpm -F capacitor-app sync:android",
+    "start:backend": "pnpm -F backend start",
+    "ios": "pnpm build:app && pnpm sync:ios && pnpm -F capacitor-app open:ios",
+    "android": "pnpm build:app && pnpm sync:android && pnpm -F capacitor-app open:android"
   },
   "keywords": [
     "workos",

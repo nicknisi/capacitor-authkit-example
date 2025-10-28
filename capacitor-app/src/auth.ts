@@ -2,22 +2,10 @@ import { App, URLOpenListenerEvent } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { Preferences } from '@capacitor/preferences';
 import { CONFIG } from './config';
+import type { SessionData, UserProfile, OrganizationWithMembership } from './types/auth';
 
-export interface User {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  emailVerified: boolean;
-  profilePictureUrl?: string;
-}
-
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  user: User;
-  organizationId?: string;
-}
+// Re-export types for convenience
+export type { SessionData, UserProfile, OrganizationWithMembership } from './types/auth';
 
 export class WorkOSAuth {
   private urlListenerRegistered = false;
@@ -95,7 +83,7 @@ export class WorkOSAuth {
       console.log('🚀 Starting OAuth flow...');
 
       // Generate the authorization URL from the backend
-      const response = await fetch(`${CONFIG.BACKEND_URL}/auth/url`, {
+      const response = await fetch(`${CONFIG.BACKEND_URL}/api/auth/url`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -134,7 +122,7 @@ export class WorkOSAuth {
     try {
       console.log('🔄 Exchanging authorization code for tokens...');
 
-      const response = await fetch(`${CONFIG.BACKEND_URL}/auth/callback`, {
+      const response = await fetch(`${CONFIG.BACKEND_URL}/api/auth/callback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -147,15 +135,19 @@ export class WorkOSAuth {
         throw new Error(error.message || `HTTP ${response.status}`);
       }
 
-      const data: AuthTokens = await response.json();
-      console.log('✅ Tokens received');
+      const data: SessionData = await response.json();
+      console.log('✅ Tokens received with enhanced session data');
+      console.log('  User:', data.user.email);
+      console.log('  Organization:', data.organizationId);
+      console.log('  Roles:', data.roles);
+      console.log('  Permissions:', data.permissions?.length || 0);
 
-      // Store tokens securely
+      // Store enhanced session data securely
       // In production, use more secure storage like Keychain (iOS) or Keystore (Android)
       // via a plugin like @capacitor-community/secure-storage-plugin
-      await this.storeTokens(data);
+      await this.storeSession(data);
 
-      console.log('💾 Tokens stored');
+      console.log('💾 Session data stored');
     } catch (error) {
       console.error('❌ Error exchanging code:', error);
       throw error;
@@ -165,7 +157,7 @@ export class WorkOSAuth {
   /**
    * Refresh the access token using the refresh token
    */
-  async refreshToken(): Promise<AuthTokens> {
+  async refreshToken(): Promise<SessionData> {
     const refreshToken = await Preferences.get({ key: 'refresh_token' });
 
     if (!refreshToken.value) {
@@ -174,7 +166,7 @@ export class WorkOSAuth {
 
     console.log('🔄 Refreshing access token...');
 
-    const response = await fetch(`${CONFIG.BACKEND_URL}/auth/refresh`, {
+    const response = await fetch(`${CONFIG.BACKEND_URL}/api/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -189,10 +181,10 @@ export class WorkOSAuth {
       throw new Error(error.message || `HTTP ${response.status}`);
     }
 
-    const data: AuthTokens = await response.json();
-    await this.storeTokens(data);
+    const data: SessionData = await response.json();
+    await this.storeSession(data);
 
-    console.log('✅ Token refreshed');
+    console.log('✅ Token refreshed with updated session data');
     return data;
   }
 
@@ -211,7 +203,7 @@ export class WorkOSAuth {
 
         if (sessionId) {
           // Get logout URL from backend
-          const response = await fetch(`${CONFIG.BACKEND_URL}/auth/logout`, {
+          const response = await fetch(`${CONFIG.BACKEND_URL}/api/auth/signout`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -221,15 +213,17 @@ export class WorkOSAuth {
 
           if (response.ok) {
             const data = await response.json();
-            // Open logout URL in browser to clear Safari cookies
-            // This is critical for clearing the WorkOS session
-            await Browser.open({ url: data.logoutUrl });
+            if (data.logoutUrl) {
+              // Open logout URL in browser to clear Safari cookies
+              // This is critical for clearing the WorkOS session
+              await Browser.open({ url: data.logoutUrl });
 
-            // Give browser a moment to load, then close it
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await Browser.close();
+              // Give browser a moment to load, then close it
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              await Browser.close();
 
-            console.log('🔒 Session revoked on WorkOS');
+              console.log('🔒 Session revoked on WorkOS');
+            }
           }
         }
       }
@@ -238,59 +232,146 @@ export class WorkOSAuth {
       // Continue with local cleanup even if revocation fails
     }
 
-    // Clear local storage
-    await Preferences.remove({ key: 'access_token' });
-    await Preferences.remove({ key: 'refresh_token' });
-    await Preferences.remove({ key: 'user' });
-    await Preferences.remove({ key: 'organization_id' });
+    // Clear all session data from local storage
+    await this.clearSession();
     console.log('👋 Signed out locally');
   }
 
   /**
-   * Get the currently stored auth session
+   * Get the currently stored auth session with full user data
    */
-  async getSession(): Promise<AuthTokens | null> {
-    const accessToken = await Preferences.get({ key: 'access_token' });
-    const refreshToken = await Preferences.get({ key: 'refresh_token' });
-    const user = await Preferences.get({ key: 'user' });
+  async getSession(): Promise<SessionData | null> {
+    const sessionData = await Preferences.get({ key: 'session_data' });
 
-    if (!accessToken.value || !refreshToken.value || !user.value) {
+    if (!sessionData.value) {
       return null;
     }
 
-    return {
-      accessToken: accessToken.value,
-      refreshToken: refreshToken.value,
-      user: JSON.parse(user.value),
-    };
+    try {
+      return JSON.parse(sessionData.value);
+    } catch {
+      return null;
+    }
   }
 
   /**
-   * Store tokens securely
+   * Get user profile from backend (verifies token and gets latest data)
+   */
+  async getUserProfile(): Promise<UserProfile | null> {
+    try {
+      const session = await this.getSession();
+      if (!session) {
+        return null;
+      }
+
+      const response = await fetch(`${CONFIG.BACKEND_URL}/api/user/profile`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get list of organizations the user belongs to
+   */
+  async getUserOrganizations(): Promise<OrganizationWithMembership[]> {
+    try {
+      const session = await this.getSession();
+      if (!session) {
+        return [];
+      }
+
+      const response = await fetch(
+        `${CONFIG.BACKEND_URL}/api/user/organizations?userId=${session.user.id}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session.accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.organizations;
+    } catch (error) {
+      console.error('Error fetching user organizations:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Switch to a different organization
+   */
+  async switchOrganization(organizationId: string): Promise<void> {
+    try {
+      const session = await this.getSession();
+      if (!session) {
+        throw new Error('No active session');
+      }
+
+      const response = await fetch(`${CONFIG.BACKEND_URL}/api/user/switch-org`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: session.user.id,
+          organizationId,
+          accessToken: session.accessToken,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || `HTTP ${response.status}`);
+      }
+
+      console.log('✅ Switched to organization:', organizationId);
+
+      // Refresh the session to get new tokens with updated org context
+      await this.refreshToken();
+    } catch (error) {
+      console.error('Error switching organization:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Store session data securely
    * In production, use a secure storage plugin for iOS Keychain / Android Keystore
    */
-  private async storeTokens(tokens: AuthTokens): Promise<void> {
+  private async storeSession(session: SessionData): Promise<void> {
     await Preferences.set({
-      key: 'access_token',
-      value: tokens.accessToken,
+      key: 'session_data',
+      value: JSON.stringify(session),
     });
+  }
 
-    await Preferences.set({
-      key: 'refresh_token',
-      value: tokens.refreshToken,
-    });
-
-    await Preferences.set({
-      key: 'user',
-      value: JSON.stringify(tokens.user),
-    });
-
-    if (tokens.organizationId) {
-      await Preferences.set({
-        key: 'organization_id',
-        value: tokens.organizationId,
-      });
-    }
+  /**
+   * Clear all session data
+   */
+  private async clearSession(): Promise<void> {
+    await Preferences.remove({ key: 'session_data' });
+    // Also clear legacy keys if they exist
+    await Preferences.remove({ key: 'access_token' });
+    await Preferences.remove({ key: 'refresh_token' });
+    await Preferences.remove({ key: 'user' });
+    await Preferences.remove({ key: 'organization_id' });
   }
 
   /**

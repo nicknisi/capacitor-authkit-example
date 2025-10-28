@@ -1,17 +1,18 @@
 # Capacitor AuthKit Example
 
-Example showing how to use WorkOS AuthKit in a Capacitor mobile app with OAuth custom URL schemes.
+Complete example showing WorkOS AuthKit in a Capacitor mobile app with Next.js backend, featuring RBAC, organizations, and multi-page UI.
 
 ## What This Demonstrates
 
-Mobile apps can't handle OAuth redirects like web apps. This example shows the complete flow:
+Mobile apps use custom URL schemes for OAuth instead of HTTP redirects. This example shows:
 
-1. User clicks "Sign In" in your Capacitor app
-2. App opens system browser with WorkOS AuthKit
-3. User authenticates
-4. WorkOS redirects to your custom URL scheme (`workosauthdemo://callback`)
-5. iOS/Android intercepts the URL and returns to your app
-6. App extracts the code and exchanges it for tokens via your backend
+1. **Mobile OAuth Flow**: System browser authentication with custom URL scheme callback
+2. **Next.js Backend**: Modern API routes handling token exchange with WorkOS
+3. **Enhanced Session Data**: Roles, permissions, entitlements, and feature flags
+4. **Multi-Page UI**: Home, Account, and Settings pages with navigation
+5. **Organization Management**: Switch between organizations, view memberships
+6. **RBAC**: Role-based access control with permissions display
+7. **Token Management**: Automatic refresh, manual refresh, secure storage
 
 ## Project Structure
 
@@ -19,9 +20,11 @@ This is a pnpm workspace with two packages:
 
 ```
 capacitor-authkit-example/
-├── backend/          # Express server handling OAuth token exchange
+├── backend/          # Next.js 15 API backend with WorkOS integration
 └── capacitor-app/    # Capacitor app with iOS/Android projects
 ```
+
+**Why Next.js?** Modern TypeScript, edge-compatible API routes, better DX, and easy deployment to Vercel/Netlify.
 
 ## Prerequisites
 
@@ -64,15 +67,15 @@ Get your credentials from [WorkOS Dashboard](https://dashboard.workos.com/):
 
 ### 3. Run Both Apps
 
-Start the backend and Capacitor dev server together:
+Start the Next.js backend and Capacitor dev server together:
 
 ```bash
 pnpm dev
 ```
 
 This runs:
-- Backend server on `http://localhost:3001`
-- Capacitor dev server on `http://localhost:5173`
+- Next.js backend on `http://localhost:3001`
+- Capacitor dev server (Vite) on `http://localhost:5173`
 
 You can also run them separately:
 
@@ -233,13 +236,15 @@ pnpm -F capacitor-app run:android   # Build and run on Android
 
 **Mobile OAuth (this example):**
 ```
-1. Open system browser with WorkOS URL
+1. Open system browser with WorkOS AuthKit
 2. User authenticates
 3. WorkOS redirects to: workosauthdemo://callback?code=...
 4. iOS/Android intercepts the custom URL
 5. App receives the URL via App.addListener('appUrlOpen')
-6. App extracts code and sends to backend
-7. Backend exchanges code for tokens
+6. App extracts code and sends to Next.js backend
+7. Backend exchanges code for tokens + enhanced session data
+   (roles, permissions, entitlements, feature flags)
+8. App stores session and navigates to Home page
 ```
 
 ### Key Components

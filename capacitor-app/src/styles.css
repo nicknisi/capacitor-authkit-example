@@ -8,7 +8,76 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
+}
+
+.app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Navigation Bar */
+.navbar {
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.navbar.hidden {
+    display: none;
+}
+
+.nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nav-brand {
+    font-size: 20px;
+    font-weight: 700;
+    color: #667eea;
+}
+
+.nav-links {
+    display: flex;
+    gap: 8px;
+}
+
+.nav-link {
+    color: #666;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.nav-link:hover {
+    background: #f8f9fa;
+    color: #667eea;
+}
+
+.nav-link.active {
+    background: #667eea;
+    color: white;
+}
+
+/* Page Views */
+.page-view {
+    flex: 1;
     padding: 20px;
+}
+
+.page-view.hidden {
+    display: none;
 }
 
 .container {
@@ -27,27 +96,23 @@ body {
     margin-bottom: 8px;
 }
 
+.header h2 {
+    font-size: 28px;
+    margin-bottom: 8px;
+}
+
 .subtitle {
     font-size: 14px;
     opacity: 0.9;
 }
 
-.view {
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-}
-
-.view.hidden {
-    display: none;
-}
-
+/* Cards */
 .info-card {
-    background: #f8f9fa;
+    background: rgba(255, 255, 255, 0.95);
     border-radius: 12px;
     padding: 20px;
     margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .info-card h3 {
@@ -100,6 +165,60 @@ body {
     font-family: 'Courier New', monospace;
 }
 
+.user-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.user-card h3 {
+    color: #333;
+    margin-bottom: 16px;
+    font-size: 18px;
+}
+
+.user-card p {
+    color: #666;
+    font-size: 14px;
+    line-height: 1.8;
+    margin-bottom: 6px;
+}
+
+.user-card strong {
+    color: #333;
+}
+
+.user-card ul {
+    list-style: none;
+    padding: 0;
+}
+
+.user-card li {
+    color: #666;
+    font-size: 14px;
+    line-height: 1.8;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.user-card li:last-child {
+    border-bottom: none;
+}
+
+.user-card .badge {
+    display: inline-block;
+    background: #667eea;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+/* Buttons */
 .primary-btn {
     width: 100%;
     background: #667eea;
@@ -146,24 +265,49 @@ body {
     background: #f8f9fa;
 }
 
+.secondary-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.danger-btn {
+    width: 100%;
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.danger-btn:hover {
+    background: #c82333;
+}
+
 .button-group {
     display: flex;
     gap: 12px;
     margin-bottom: 20px;
 }
 
-.button-group .secondary-btn {
+.button-group .secondary-btn,
+.button-group .danger-btn {
     flex: 1;
 }
 
+/* Status Messages */
 .status-message {
     background: white;
     border-radius: 12px;
     padding: 16px;
-    margin-bottom: 20px;
+    margin: 20px;
     font-size: 14px;
     text-align: center;
     font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .status-message.hidden {
@@ -188,30 +332,7 @@ body {
     border: 2px solid #bee5eb;
 }
 
-.user-card {
-    background: #f8f9fa;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 20px;
-}
-
-.user-card h3 {
-    color: #333;
-    margin-bottom: 16px;
-    font-size: 18px;
-}
-
-.user-card p {
-    color: #666;
-    font-size: 14px;
-    line-height: 1.8;
-    margin-bottom: 6px;
-}
-
-.user-card strong {
-    color: #333;
-}
-
+/* Debug Info */
 .debug-info {
     background: #1e1e1e;
     color: #d4d4d4;
@@ -222,4 +343,66 @@ body {
     overflow-x: auto;
     white-space: pre-wrap;
     word-break: break-all;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Organization Switcher */
+.org-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.org-item {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.org-item:hover {
+    border-color: #667eea;
+    background: #f8f9fa;
+}
+
+.org-item.active {
+    border-color: #667eea;
+    background: #f0f3ff;
+}
+
+.org-item .org-name {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.org-item .org-role {
+    font-size: 13px;
+    color: #666;
+}
+
+/* Loading State */
+.loading {
+    text-align: center;
+    color: #666;
+    padding: 20px;
+}
+
+/* Utilities */
+.hidden {
+    display: none !important;
+}
+
+.text-muted {
+    color: #999;
+    font-size: 13px;
+}
+
+.divider {
+    height: 1px;
+    background: #e9ecef;
+    margin: 20px 0;
 }

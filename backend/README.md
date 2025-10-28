@@ -1,16 +1,40 @@
-# Backend Server
+# Next.js Backend
 
-Express server handling OAuth code exchange and token management for the Capacitor app.
+Next.js 15 API backend for WorkOS AuthKit mobile OAuth flow with enhanced session data.
 
-## Why a Backend?
+## Why Next.js?
 
-Mobile apps cannot securely store the WorkOS client secret. The secret must remain on your backend server. The mobile app sends the authorization code to your backend, which exchanges it for tokens using the secret.
+This backend uses Next.js instead of Express to provide:
+- Modern TypeScript with better type inference
+- API routes with edge-compatible runtime
+- Built-in CORS handling
+- Better developer experience
+- Easy deployment to Vercel, Netlify, or other platforms
 
-**Never put your client secret in a mobile app.**
+The Capacitor mobile app makes HTTP requests to these API routes to handle OAuth code exchange and session management.
+
+## Architecture
+
+- **Next.js 15** with App Router
+- **TypeScript** for type safety
+- **@workos-inc/node** SDK for WorkOS integration
+- **API Routes** under `app/api/*`
+- **CORS middleware** for Capacitor origins
+
+## Environment Setup
+
+Create a `.env.local` file (or use the existing `.env`):
+
+```bash
+WORKOS_API_KEY=sk_test_...
+WORKOS_CLIENT_ID=client_...
+```
+
+Get credentials from [WorkOS Dashboard](https://dashboard.workos.com/).
 
 ## Running
 
-From the workspace root:
+From workspace root:
 
 ```bash
 pnpm dev:backend
@@ -26,23 +50,20 @@ Server runs on `http://localhost:3001`
 
 ## API Endpoints
 
-### POST /auth/url
+### Authentication
 
-Generate WorkOS authorization URL for the mobile app to open.
+#### `POST /api/auth/url`
+
+Generate WorkOS authorization URL for mobile OAuth flow.
 
 **Request:**
 ```json
 {
   "redirectUri": "workosauthdemo://callback",
-  "state": "optional-state-value",
+  "state": "optional-state",
   "organizationId": "org_123"
 }
 ```
-
-**Parameters:**
-- `redirectUri` (required): Must match WorkOS Dashboard configuration
-- `state` (optional): CSRF token and routing data
-- `organizationId` (optional): Pre-select organization
 
 **Response:**
 ```json
@@ -51,16 +72,9 @@ Generate WorkOS authorization URL for the mobile app to open.
 }
 ```
 
-**Example:**
-```bash
-curl -X POST http://localhost:3001/auth/url \
-  -H "Content-Type: application/json" \
-  -d '{"redirectUri": "workosauthdemo://callback"}'
-```
+#### `POST /api/auth/callback`
 
-### POST /auth/callback
-
-Exchange authorization code for access and refresh tokens.
+Exchange authorization code for access/refresh tokens with full user data.
 
 **Request:**
 ```json
@@ -80,32 +94,24 @@ Exchange authorization code for access and refresh tokens.
     "firstName": "John",
     "lastName": "Doe",
     "emailVerified": true,
-    "profilePictureUrl": "https://..."
+    "profilePictureUrl": "https://...",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
   },
   "organizationId": "org_01...",
-  "impersonator": null
+  "role": { "slug": "admin", "name": "Admin" },
+  "roles": [{ "slug": "admin", "name": "Admin" }],
+  "permissions": [{ "id": "perm_01", "name": "read:users" }],
+  "entitlements": [{ "id": "ent_01", "name": "premium", "value": true }],
+  "featureFlags": [{ "id": "ff_01", "name": "new_ui", "enabled": true }],
+  "impersonator": null,
+  "authenticationMethod": "password"
 }
 ```
 
-**Example:**
-```bash
-curl -X POST http://localhost:3001/auth/callback \
-  -H "Content-Type: application/json" \
-  -d '{"code": "01ABCDEF..."}'
-```
+#### `POST /api/auth/refresh`
 
-**Implementation:**
-```javascript
-const { user, accessToken, refreshToken, organizationId, impersonator } =
-  await workos.userManagement.authenticateWithCode({
-    clientId: process.env.WORKOS_CLIENT_ID,
-    code: req.body.code,
-  });
-```
-
-### POST /auth/refresh
-
-Refresh an expired access token using a refresh token.
+Refresh access token using refresh token.
 
 **Request:**
 ```json
@@ -114,99 +120,32 @@ Refresh an expired access token using a refresh token.
 }
 ```
 
-**Response:**
-```json
-{
-  "accessToken": "eyJhbGc...",
-  "refreshToken": "ey_refresh..."
-}
-```
+**Response:** Same as callback response
 
-**Example:**
-```bash
-curl -X POST http://localhost:3001/auth/refresh \
-  -H "Content-Type: application/json" \
-  -d '{"refreshToken": "ey_refresh..."}'
-```
+#### `POST /api/auth/signout`
 
-**Implementation:**
-```javascript
-const { accessToken, refreshToken } =
-  await workos.userManagement.authenticateWithRefreshToken({
-    clientId: process.env.WORKOS_CLIENT_ID,
-    refreshToken: req.body.refreshToken,
-  });
-```
-
-### POST /auth/verify
-
-Verify an access token and return user information.
+Sign out user and optionally get logout URL.
 
 **Request:**
 ```json
 {
-  "accessToken": "eyJhbGc..."
+  "sessionId": "session_01..."
 }
 ```
 
 **Response:**
 ```json
 {
-  "valid": true,
-  "user": {
-    "id": "user_01...",
-    "email": "user@example.com",
-    "firstName": "John",
-    "lastName": "Doe"
-  }
+  "success": true,
+  "logoutUrl": "https://api.workos.com/user_management/sessions/logout?..."
 }
 ```
 
-**Example:**
-```bash
-curl -X POST http://localhost:3001/auth/verify \
-  -H "Content-Type: application/json" \
-  -d '{"accessToken": "eyJhbGc..."}'
-```
+### User Management
 
-### POST /auth/roles
+#### `GET /api/user/profile`
 
-Get user's organization membership and role information (RBAC).
-
-**Request:**
-```json
-{
-  "userId": "user_01...",
-  "organizationId": "org_01..."
-}
-```
-
-**Response:**
-```json
-{
-  "userId": "user_01...",
-  "organizationId": "org_01...",
-  "role": {
-    "slug": "admin",
-    "name": "Admin"
-  },
-  "status": "active"
-}
-```
-
-**Example:**
-```bash
-curl -X POST http://localhost:3001/auth/roles \
-  -H "Content-Type: application/json" \
-  -d '{
-    "userId": "user_01...",
-    "organizationId": "org_01..."
-  }'
-```
-
-### GET /api/protected
-
-Example protected endpoint demonstrating Bearer token authentication.
+Get user profile with roles and permissions (requires Bearer token).
 
 **Headers:**
 ```
@@ -216,155 +155,201 @@ Authorization: Bearer eyJhbGc...
 **Response:**
 ```json
 {
-  "message": "This is a protected endpoint",
-  "user": {
-    "id": "user_01...",
-    "email": "user@example.com"
-  },
-  "timestamp": "2024-01-01T00:00:00.000Z"
+  "user": { ... },
+  "organizationId": "org_01...",
+  "role": { "slug": "admin", "name": "Admin" },
+  "roles": [...],
+  "permissions": [...],
+  "entitlements": [...],
+  "featureFlags": [...],
+  "impersonator": null
 }
 ```
 
-**Example:**
-```bash
-curl -X GET http://localhost:3001/api/protected \
-  -H "Authorization: Bearer eyJhbGc..."
-```
+#### `GET /api/user/organizations?userId=user_01`
 
-**Implementation:**
-```javascript
-// Extract token from Authorization header
-const token = req.headers.authorization?.replace('Bearer ', '');
+List organizations user belongs to.
 
-// Verify token
-const { user } = await workos.userManagement.getUser(token);
+**Query Parameters:**
+- `userId` (required): User ID
 
-// Return protected data
-res.json({ message: 'Protected data', user });
-```
-
-## Environment Variables
-
-Create a `.env` file:
-
-```bash
-WORKOS_API_KEY=sk_test_...
-WORKOS_CLIENT_ID=client_...
-```
-
-Get these from [WorkOS Dashboard](https://dashboard.workos.com/).
-
-## Production Deployment
-
-### Vercel
-
-1. Create `vercel.json`:
+**Response:**
 ```json
 {
-  "version": 2,
-  "builds": [
+  "organizations": [
     {
-      "src": "server.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "server.js"
+      "organization": {
+        "id": "org_01...",
+        "name": "Acme Corp",
+        "createdAt": "2024-01-01T00:00:00.000Z",
+        "updatedAt": "2024-01-01T00:00:00.000Z"
+      },
+      "membership": {
+        "id": "om_01...",
+        "userId": "user_01...",
+        "organizationId": "org_01...",
+        "role": { "slug": "admin", "name": "Admin" },
+        "status": "active",
+        "createdAt": "2024-01-01T00:00:00.000Z",
+        "updatedAt": "2024-01-01T00:00:00.000Z"
+      }
     }
   ]
 }
 ```
 
-2. Deploy:
-```bash
-vercel
+#### `POST /api/user/switch-org`
+
+Switch user's active organization.
+
+**Request:**
+```json
+{
+  "userId": "user_01...",
+  "organizationId": "org_02...",
+  "accessToken": "eyJhbGc..."
+}
 ```
 
-3. Set environment variables in Vercel Dashboard
-
-### Railway
-
-1. Connect GitHub repo
-2. Add environment variables
-3. Deploy automatically
-
-### Render
-
-1. Create new Web Service
-2. Set build command: `npm install`
-3. Set start command: `npm start`
-4. Add environment variables
-
-## Security Notes
-
-- Client secret must never be exposed to the mobile app
-- All token exchanges require the client secret
-- Access tokens typically expire after 1 hour
-- Refresh tokens should be stored securely in the mobile app
-- Always verify tokens on the backend for protected routes
-- Use HTTPS in production
-
-## CORS Configuration
-
-The server allows requests from `http://localhost:5173` (Vite dev server) and `capacitor://localhost` (Capacitor iOS).
-
-For production, update the CORS configuration:
-
-```javascript
-app.use(cors({
-  origin: [
-    'https://yourdomain.com',
-    'capacitor://localhost',
-    'http://localhost' // iOS
-  ]
-}));
+**Response:**
+```json
+{
+  "success": true,
+  "organizationId": "org_02...",
+  "role": { "slug": "member", "name": "Member" }
+}
 ```
-
-## Testing the Full Flow
-
-1. Start the backend:
-   ```bash
-   pnpm dev
-   ```
-
-2. Generate authorization URL:
-   ```bash
-   curl -X POST http://localhost:3001/auth/url \
-     -H "Content-Type: application/json" \
-     -d '{"redirectUri": "workosauthdemo://callback"}'
-   ```
-
-3. Open the returned URL in a browser and complete authentication
-
-4. WorkOS redirects to: `workosauthdemo://callback?code=...`
-
-5. Exchange the code for tokens:
-   ```bash
-   curl -X POST http://localhost:3001/auth/callback \
-     -H "Content-Type: application/json" \
-     -d '{"code": "YOUR_CODE_HERE"}'
-   ```
-
-6. Use the access token with protected endpoints:
-   ```bash
-   curl -X GET http://localhost:3001/api/protected \
-     -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-   ```
 
 ## Code Structure
 
 ```
-server.js
-├── WorkOS initialization
-├── CORS configuration
-├── Auth endpoints
-│   ├── /auth/url        - Generate authorization URL
-│   ├── /auth/callback   - Exchange code for tokens
-│   ├── /auth/refresh    - Refresh access token
-│   ├── /auth/verify     - Verify access token
-│   └── /auth/roles      - Get user roles (RBAC)
-└── Protected endpoints
-    └── /api/protected   - Example Bearer auth
+backend/
+├── app/
+│   ├── api/
+│   │   ├── auth/
+│   │   │   ├── url/route.ts
+│   │   │   ├── callback/route.ts
+│   │   │   ├── refresh/route.ts
+│   │   │   └── signout/route.ts
+│   │   └── user/
+│   │       ├── profile/route.ts
+│   │       ├── switch-org/route.ts
+│   │       └── organizations/route.ts
+│   ├── layout.tsx
+│   └── page.tsx
+├── lib/
+│   ├── types.ts          # TypeScript types
+│   ├── workos.ts         # WorkOS client & helpers
+│   └── cors.ts           # CORS middleware
+├── .env                  # Environment variables
+└── package.json
 ```
+
+## Key Implementation Details
+
+### JWT Decoding
+
+The backend decodes the WorkOS access token (JWT) to extract roles, permissions, entitlements, and feature flags:
+
+```typescript
+const parts = accessToken.split('.');
+if (parts.length === 3) {
+  const payload = Buffer.from(parts[1], 'base64url').toString('utf-8');
+  const decodedToken = JSON.parse(payload);
+
+  const roles = decodedToken.roles || [];
+  const permissions = decodedToken.permissions || [];
+  const entitlements = decodedToken.entitlements || [];
+  const featureFlags = decodedToken.feature_flags || [];
+}
+```
+
+### CORS Configuration
+
+CORS is configured to allow requests from:
+- `http://localhost:5173` (Vite dev server)
+- `capacitor://localhost` (Capacitor iOS)
+- `http://localhost` (Capacitor iOS)
+- `ionic://localhost` (Capacitor Android)
+
+See `lib/cors.ts` for implementation.
+
+### Error Handling
+
+All routes return consistent error responses:
+
+```json
+{
+  "error": "Error type",
+  "message": "Human-readable message",
+  "details": { ... }
+}
+```
+
+## Deployment
+
+### Vercel
+
+```bash
+vercel
+```
+
+Set environment variables in Vercel dashboard.
+
+### Other Platforms
+
+Build the Next.js app:
+
+```bash
+pnpm build
+pnpm start
+```
+
+Set environment variables and expose port 3001 (or configure as needed).
+
+## Security Notes
+
+- Client secret never exposed to mobile app
+- All token exchanges happen on backend
+- CORS properly configured
+- JWT signature verified by WorkOS SDK
+- Bearer token authentication for protected routes
+- HTTPS required in production
+
+## Testing
+
+Test with curl:
+
+```bash
+# Generate auth URL
+curl -X POST http://localhost:3001/api/auth/url \
+  -H "Content-Type: application/json" \
+  -d '{"redirectUri": "workosauthdemo://callback"}'
+
+# Exchange code for tokens
+curl -X POST http://localhost:3001/api/auth/callback \
+  -H "Content-Type: application/json" \
+  -d '{"code": "YOUR_CODE"}'
+
+# Get user profile
+curl -X GET http://localhost:3001/api/user/profile \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+## Differences from Express
+
+This backend replaces the original Express implementation with:
+
+- Next.js API routes instead of Express routes
+- TypeScript with better type inference
+- Edge-compatible runtime
+- Built-in middleware support
+- Easier deployment options
+- Same API contract (mobile app works without changes)
+
+## Resources
+
+- [Next.js App Router](https://nextjs.org/docs/app)
+- [Next.js API Routes](https://nextjs.org/docs/app/building-your-application/routing/route-handlers)
+- [WorkOS Node SDK](https://workos.com/docs/reference/node)
+- [WorkOS User Management](https://workos.com/docs/user-management)
