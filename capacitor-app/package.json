@@ -1,5 +1,5 @@
 {
-  "name": "workos-capacitor-demo",
+  "name": "capacitor-app",
   "version": "1.0.0",
   "description": "Capacitor demo showing WorkOS OAuth with custom URL schemes",
   "main": "index.js",

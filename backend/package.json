@@ -1,5 +1,5 @@
 {
-  "name": "workos-mobile-auth-demo-backend",
+  "name": "backend",
   "version": "1.0.0",
   "description": "Backend server for WorkOS mobile auth demo",
   "type": "module",

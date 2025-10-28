@@ -1,0 +1,27 @@
+{
+  "name": "capacitor-authkit-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Example demonstrating WorkOS AuthKit integration in a Capacitor app",
+  "scripts": {
+    "dev": "concurrently -n backend,app \"pnpm -F backend dev\" \"pnpm -F capacitor-app dev\"",
+    "dev:backend": "pnpm -F backend dev",
+    "dev:app": "pnpm -F capacitor-app dev",
+    "build": "pnpm -r build",
+    "sync": "pnpm -F capacitor-app sync",
+    "sync:ios": "pnpm -F capacitor-app sync:ios",
+    "sync:android": "pnpm -F capacitor-app sync:android"
+  },
+  "keywords": [
+    "workos",
+    "authkit",
+    "capacitor",
+    "mobile",
+    "oauth"
+  ],
+  "author": "WorkOS",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
