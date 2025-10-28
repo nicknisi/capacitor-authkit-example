@@ -1,147 +1,24 @@
-import { WorkOSAuth, type SessionData, type OrganizationWithMembership } from './auth';
+import { WorkOSAuth, type SessionData } from './auth';
 
 // Initialize the auth service
 const auth = new WorkOSAuth();
 
-// Current page state
-let currentPage = 'home';
+// Current session state
 let currentSession: SessionData | null = null;
 
-// DOM elements - Navigation
-const navbar = document.getElementById('navbar')!;
-const navLinks = document.querySelectorAll('.nav-link');
-
-// DOM elements - Views
-const loginView = document.getElementById('loginView')!;
-const homeView = document.getElementById('homeView')!;
-const accountView = document.getElementById('accountView')!;
-const settingsView = document.getElementById('settingsView')!;
-
-// DOM elements - Status
+// DOM elements
 const statusMessage = document.getElementById('statusMessage')!;
-
-// DOM elements - Login page
-const loginBtn = document.getElementById('loginBtn')!;
-
-// DOM elements - Home page
-const homeUserInfo = document.getElementById('homeUserInfo')!;
-const homeRefreshBtn = document.getElementById('homeRefreshBtn')!;
-const homeSignOutBtn = document.getElementById('homeSignOutBtn')!;
-
-// DOM elements - Account page
-const accountUserInfo = document.getElementById('accountUserInfo')!;
-const accountRolesInfo = document.getElementById('accountRolesInfo')!;
-const accountOrgInfo = document.getElementById('accountOrgInfo')!;
-const accountEntitlementsInfo = document.getElementById('accountEntitlementsInfo')!;
-
-// DOM elements - Settings page
-const orgSwitcherContainer = document.getElementById('orgSwitcherContainer')!;
-const settingsRefreshBtn = document.getElementById('settingsRefreshBtn')!;
-const settingsSignOutBtn = document.getElementById('settingsSignOutBtn')!;
-const sessionDebugInfo = document.getElementById('sessionDebugInfo')!;
-const tokenClaimsInfo = document.getElementById('tokenClaimsInfo')!;
-
-// Event Handlers - Login
-loginBtn.addEventListener('click', handleLogin);
-
-// Event Handlers - Home
-homeRefreshBtn.addEventListener('click', handleRefresh);
-homeSignOutBtn.addEventListener('click', handleSignOut);
-
-// Event Handlers - Settings
-settingsRefreshBtn.addEventListener('click', handleRefresh);
-settingsSignOutBtn.addEventListener('click', handleSignOut);
-
-// Event Handlers - Navigation
-navLinks.forEach(link => {
-  link.addEventListener('click', (e) => {
-    e.preventDefault();
-    const page = (e.target as HTMLElement).getAttribute('data-page');
-    if (page) {
-      navigateTo(page);
-    }
-  });
-});
+const mainContent = document.getElementById('mainContent')!;
 
 // Listen for auth events
 window.addEventListener('auth-success', handleAuthSuccess);
 window.addEventListener('auth-error', handleAuthError);
 
-// Handle hash navigation
-window.addEventListener('hashchange', handleHashChange);
-
 // Initialize app
 init();
 
 async function init() {
-  // Check for hash-based navigation
-  handleHashChange();
-
-  // Check for existing session
   await checkExistingSession();
-}
-
-function handleHashChange() {
-  const hash = window.location.hash.slice(1);
-  if (hash && currentSession) {
-    navigateTo(hash);
-  }
-}
-
-async function handleLogin() {
-  try {
-    showStatus('Opening browser for authentication...', 'info');
-    loginBtn.setAttribute('disabled', 'true');
-
-    await auth.signIn();
-  } catch (error) {
-    console.error('Login error:', error);
-    showStatus(
-      `Error: ${error instanceof Error ? error.message : String(error)}`,
-      'error'
-    );
-    loginBtn.removeAttribute('disabled');
-  }
-}
-
-async function handleRefresh() {
-  try {
-    showStatus('Refreshing session...', 'info');
-    homeRefreshBtn.setAttribute('disabled', 'true');
-    settingsRefreshBtn.setAttribute('disabled', 'true');
-
-    const session = await auth.refreshToken();
-    currentSession = session;
-
-    showStatus('✅ Session refreshed successfully!', 'success');
-
-    // Refresh current page data
-    await refreshCurrentPage();
-  } catch (error) {
-    console.error('Refresh error:', error);
-    showStatus(
-      `Error: ${error instanceof Error ? error.message : String(error)}`,
-      'error'
-    );
-  } finally {
-    homeRefreshBtn.removeAttribute('disabled');
-    settingsRefreshBtn.removeAttribute('disabled');
-  }
-}
-
-async function handleSignOut() {
-  try {
-    await auth.signOut();
-    currentSession = null;
-    showLoginView();
-    showStatus('Signed out successfully', 'info');
-  } catch (error) {
-    console.error('Sign out error:', error);
-    showStatus(
-      `Error: ${error instanceof Error ? error.message : String(error)}`,
-      'error'
-    );
-  }
 }
 
 async function handleAuthSuccess(event: Event) {
@@ -149,24 +26,20 @@ async function handleAuthSuccess(event: Event) {
   console.log('Auth success event:', customEvent.detail);
 
   // Give the token exchange a moment to complete
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await new Promise(resolve => setTimeout(resolve, 500));
 
   const session = await auth.getSession();
   if (session) {
     currentSession = session;
     showStatus('✅ Authentication successful!', 'success');
-    showAuthenticatedView();
+    renderLoggedInState();
   }
-
-  loginBtn.removeAttribute('disabled');
 }
 
 function handleAuthError(event: Event) {
   const customEvent = event as CustomEvent;
   console.error('Auth error event:', customEvent.detail);
-
   showStatus(`Error: ${customEvent.detail.error}`, 'error');
-  loginBtn.removeAttribute('disabled');
 }
 
 async function checkExistingSession() {
@@ -188,247 +61,325 @@ async function checkExistingSession() {
 
         try {
           currentSession = await auth.refreshToken();
-          showAuthenticatedView();
+          renderLoggedInState();
           console.log('✅ Session refreshed on app start');
         } catch (error) {
           console.error('Failed to refresh token:', error);
-          showLoginView();
+          currentSession = null;
+          renderLoginState();
           showStatus('Session expired, please sign in again', 'info');
           return;
         }
       } else {
-        showAuthenticatedView();
+        renderLoggedInState();
       }
     } catch (error) {
       console.error('Error checking token expiration:', error);
-      showAuthenticatedView();
+      renderLoggedInState();
     }
+  } else {
+    renderLoginState();
   }
 }
 
-function navigateTo(page: string) {
-  currentPage = page;
-  window.location.hash = page;
+function renderLoginState() {
+  mainContent.innerHTML = `
+    <div class="container">
+      <div class="header">
+        <h1>🔐 WorkOS AuthKit</h1>
+        <p class="subtitle">Capacitor Mobile OAuth Demo</p>
+      </div>
 
-  // Hide all views
-  homeView.classList.add('hidden');
-  accountView.classList.add('hidden');
-  settingsView.classList.add('hidden');
+      <div class="info-card">
+        <h3>📱 Mobile OAuth Flow</h3>
+        <p>This demo shows WorkOS AuthKit in a Capacitor mobile app with:</p>
+        <ul>
+          <li><strong>Custom URL Scheme:</strong> workosauthdemo://</li>
+          <li><strong>System Browser OAuth:</strong> Secure authentication flow</li>
+          <li><strong>Next.js Backend:</strong> Token exchange with roles & permissions</li>
+          <li><strong>Enhanced Session:</strong> RBAC, organizations, entitlements</li>
+        </ul>
+      </div>
 
-  // Show selected view
-  switch (page) {
-    case 'home':
-      homeView.classList.remove('hidden');
-      renderHomePage();
-      break;
-    case 'account':
-      accountView.classList.remove('hidden');
-      renderAccountPage();
-      break;
-    case 'settings':
-      settingsView.classList.remove('hidden');
-      renderSettingsPage();
-      break;
-  }
+      <button id="loginBtn" class="primary-btn">
+        Sign In with WorkOS
+      </button>
 
-  // Update navigation active state
-  navLinks.forEach(link => {
-    if (link.getAttribute('data-page') === page) {
-      link.classList.add('active');
-    } else {
-      link.classList.remove('active');
-    }
-  });
-}
-
-async function refreshCurrentPage() {
-  if (currentPage === 'home') {
-    renderHomePage();
-  } else if (currentPage === 'account') {
-    renderAccountPage();
-  } else if (currentPage === 'settings') {
-    await renderSettingsPage();
-  }
-}
-
-function showLoginView() {
-  navbar.classList.add('hidden');
-  loginView.classList.remove('hidden');
-  homeView.classList.add('hidden');
-  accountView.classList.add('hidden');
-  settingsView.classList.add('hidden');
-}
-
-function showAuthenticatedView() {
-  navbar.classList.remove('hidden');
-  loginView.classList.add('hidden');
-
-  // Navigate to home by default
-  const hash = window.location.hash.slice(1);
-  navigateTo(hash || 'home');
-}
-
-function renderHomePage() {
-  if (!currentSession) return;
-
-  const { user, organizationId, roles, permissions } = currentSession;
-
-  homeUserInfo.innerHTML = `
-    <h3>Welcome, ${user.firstName || user.email}! 👋</h3>
-    <p><strong>Email:</strong> ${user.email}</p>
-    <p><strong>Email Verified:</strong> ${user.emailVerified ? '✅ Yes' : '❌ No'}</p>
-    ${organizationId ? `<p><strong>Organization ID:</strong> ${organizationId}</p>` : ''}
-    ${roles && roles.length > 0 ? `<p><strong>Roles:</strong> ${roles.map(r => r.name || r.slug).join(', ')}</p>` : ''}
-    ${permissions && permissions.length > 0 ? `<p><strong>Permissions:</strong> ${permissions.length} permission(s)</p>` : ''}
+      <div class="info-card">
+        <h4>What happens when you sign in:</h4>
+        <ol>
+          <li>App opens system browser with WorkOS AuthKit</li>
+          <li>You authenticate using WorkOS</li>
+          <li>WorkOS redirects to: <code>workosauthdemo://callback?code=...</code></li>
+          <li>iOS/Android intercepts URL and returns to app</li>
+          <li>App sends code to Next.js backend</li>
+          <li>Backend exchanges code for tokens with full user data</li>
+        </ol>
+      </div>
+    </div>
   `;
+
+  // Add login button handler
+  const loginBtn = document.getElementById('loginBtn');
+  if (loginBtn) {
+    loginBtn.addEventListener('click', handleLogin);
+  }
 }
 
-function renderAccountPage() {
+function renderLoggedInState() {
   if (!currentSession) return;
 
   const { user, organizationId, role, roles, permissions, entitlements, featureFlags } = currentSession;
 
-  // User Info
-  accountUserInfo.innerHTML = `
-    <p><strong>ID:</strong> ${user.id}</p>
-    <p><strong>Email:</strong> ${user.email}</p>
-    <p><strong>First Name:</strong> ${user.firstName || 'N/A'}</p>
-    <p><strong>Last Name:</strong> ${user.lastName || 'N/A'}</p>
-    <p><strong>Email Verified:</strong> ${user.emailVerified ? '✅ Yes' : '❌ No'}</p>
-    ${user.profilePictureUrl ? `<p><strong>Profile Picture:</strong> <a href="${user.profilePictureUrl}" target="_blank">View</a></p>` : ''}
-    <p><strong>Created:</strong> ${new Date(user.createdAt).toLocaleDateString()}</p>
-    <p><strong>Updated:</strong> ${new Date(user.updatedAt).toLocaleDateString()}</p>
+  // Build profile section
+  const profileHtml = `
+    <div class="section">
+      <h3>👤 Profile Information</h3>
+      <div class="info-grid">
+        <div class="info-item">
+          <span class="label">Name</span>
+          <span class="value">${user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user.email}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Email</span>
+          <span class="value">${user.email} ${user.emailVerified ? '✅' : '⚠️'}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">User ID</span>
+          <span class="value code">${user.id}</span>
+        </div>
+        ${user.profilePictureUrl ? `
+        <div class="info-item">
+          <span class="label">Avatar</span>
+          <img src="${user.profilePictureUrl}" alt="Profile" class="avatar-small">
+        </div>` : ''}
+      </div>
+    </div>
   `;
 
-  // Roles & Permissions
+  // Build organization section
+  const orgHtml = organizationId ? `
+    <div class="section">
+      <h3>🏢 Organization</h3>
+      <div class="info-grid">
+        <div class="info-item">
+          <span class="label">Organization ID</span>
+          <span class="value code">${organizationId}</span>
+        </div>
+        ${role ? `
+        <div class="info-item">
+          <span class="label">Current Role</span>
+          <span class="value">${role.name || role.slug}</span>
+        </div>` : ''}
+      </div>
+      <div id="orgSwitcher" class="org-switcher-section"></div>
+    </div>
+  ` : '';
+
+  // Build roles and permissions section
+  let rolesHtml = '';
   if (roles && roles.length > 0) {
-    accountRolesInfo.innerHTML = `
-      <h4>Roles</h4>
-      <ul>
-        ${roles.map(r => `<li><strong>${r.name || r.slug}</strong> <span class="badge">Role</span></li>`).join('')}
-      </ul>
+    rolesHtml = `
+    <div class="section">
+      <h3>🛡️ Roles & Permissions</h3>
+      <div class="roles-grid">
+        ${roles.map(r => `
+          <div class="role-card">
+            <span class="role-name">${r.name || r.slug}</span>
+          </div>
+        `).join('')}
+      </div>
       ${permissions && permissions.length > 0 ? `
-        <h4 style="margin-top: 16px;">Permissions (${permissions.length})</h4>
-        <ul>
-          ${permissions.map(p => `<li>${p.name || p.id}</li>`).join('')}
-        </ul>
+        <div class="permissions-list">
+          <h4>Permissions (${permissions.length})</h4>
+          <div class="permissions-grid">
+            ${permissions.map(p => `
+              <span class="permission-badge">${p.name || p.id}</span>
+            `).join('')}
+          </div>
+        </div>
       ` : ''}
+    </div>
     `;
-  } else {
-    accountRolesInfo.innerHTML = '<p class="text-muted">No roles assigned</p>';
   }
 
-  // Organization
-  if (organizationId) {
-    accountOrgInfo.innerHTML = `
-      <p><strong>Organization ID:</strong> ${organizationId}</p>
-      ${role ? `<p><strong>Current Role:</strong> ${role.name || role.slug}</p>` : ''}
-    `;
-  } else {
-    accountOrgInfo.innerHTML = '<p class="text-muted">Not part of an organization</p>';
-  }
-
-  // Entitlements & Feature Flags
+  // Build entitlements and feature flags section
+  let entitlementsHtml = '';
   if ((entitlements && entitlements.length > 0) || (featureFlags && featureFlags.length > 0)) {
-    let html = '';
+    entitlementsHtml = '<div class="section"><h3>⚡ Entitlements & Features</h3><div class="features-grid">';
 
     if (entitlements && entitlements.length > 0) {
-      html += `
-        <h4>Entitlements (${entitlements.length})</h4>
-        <ul>
-          ${entitlements.map(e => `<li><strong>${e.name}</strong>: ${e.value}</li>`).join('')}
-        </ul>
-      `;
+      entitlementsHtml += entitlements.map(e => `
+        <div class="feature-card">
+          <span class="feature-name">${e.name}</span>
+          <span class="feature-value">${e.value}</span>
+        </div>
+      `).join('');
     }
 
     if (featureFlags && featureFlags.length > 0) {
-      html += `
-        <h4 style="margin-top: 16px;">Feature Flags (${featureFlags.length})</h4>
-        <ul>
-          ${featureFlags.map(f => `<li>${f.name}: ${f.enabled ? '✅ Enabled' : '❌ Disabled'}</li>`).join('')}
-        </ul>
-      `;
+      entitlementsHtml += featureFlags.map(f => `
+        <div class="feature-card ${f.enabled ? 'enabled' : 'disabled'}">
+          <span class="feature-name">${f.name}</span>
+          <span class="feature-status">${f.enabled ? '✅ Enabled' : '❌ Disabled'}</span>
+        </div>
+      `).join('');
     }
 
-    accountEntitlementsInfo.innerHTML = html;
-  } else {
-    accountEntitlementsInfo.innerHTML = '<p class="text-muted">No entitlements or feature flags</p>';
+    entitlementsHtml += '</div></div>';
+  }
+
+  // Render the main content
+  mainContent.innerHTML = `
+    <div class="container logged-in">
+      <div class="header">
+        <h1>🔐 WorkOS AuthKit</h1>
+        <p class="subtitle">Welcome back!</p>
+      </div>
+
+      <div class="user-card main-card">
+        ${profileHtml}
+        ${orgHtml}
+        ${rolesHtml}
+        ${entitlementsHtml}
+
+        <div class="section actions">
+          <div class="button-group">
+            <button id="refreshBtn" class="secondary-btn">
+              🔄 Refresh Session
+            </button>
+            <button id="signOutBtn" class="danger-btn">
+              🚪 Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Add event handlers
+  const refreshBtn = document.getElementById('refreshBtn');
+  const signOutBtn = document.getElementById('signOutBtn');
+
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', handleRefresh);
+  }
+
+  if (signOutBtn) {
+    signOutBtn.addEventListener('click', handleSignOut);
+  }
+
+  // Load organization switcher if applicable
+  if (organizationId) {
+    loadOrganizationSwitcher();
   }
 }
 
-async function renderSettingsPage() {
-  if (!currentSession) return;
-
-  // Render organization switcher
-  await renderOrganizationSwitcher();
-
-  // Render session debug info
-  sessionDebugInfo.textContent = JSON.stringify({
-    userId: currentSession.user.id,
-    email: currentSession.user.email,
-    organizationId: currentSession.organizationId,
-    hasAccessToken: !!currentSession.accessToken,
-    hasRefreshToken: !!currentSession.refreshToken,
-    rolesCount: currentSession.roles?.length || 0,
-    permissionsCount: currentSession.permissions?.length || 0,
-    entitlementsCount: currentSession.entitlements?.length || 0,
-    featureFlagsCount: currentSession.featureFlags?.length || 0,
-  }, null, 2);
-
-  // Render token claims
-  try {
-    const parts = currentSession.accessToken.split('.');
-    if (parts.length === 3) {
-      const payload = Buffer.from(parts[1], 'base64url').toString('utf-8');
-      const claims = JSON.parse(payload);
-      tokenClaimsInfo.textContent = JSON.stringify(claims, null, 2);
-    }
-  } catch (e) {
-    tokenClaimsInfo.textContent = 'Unable to decode token claims';
-  }
-}
-
-async function renderOrganizationSwitcher() {
-  if (!currentSession) return;
-
-  orgSwitcherContainer.innerHTML = '<div class="loading">Loading organizations...</div>';
+async function loadOrganizationSwitcher() {
+  const orgSwitcher = document.getElementById('orgSwitcher');
+  if (!orgSwitcher || !currentSession) return;
 
   try {
     const organizations = await auth.getUserOrganizations();
 
-    if (organizations.length === 0) {
-      orgSwitcherContainer.innerHTML = '<p class="text-muted">You are not part of any organizations</p>';
-      return;
+    if (organizations.length <= 1) {
+      return; // No need for switcher if only one org
     }
 
-    let html = '<div class="org-list">';
+    let html = '<h4>Switch Organization</h4><div class="org-list">';
 
     for (const { organization, membership } of organizations) {
       const isActive = currentSession.organizationId === organization.id;
       html += `
         <div class="org-item ${isActive ? 'active' : ''}" data-org-id="${organization.id}">
-          <div class="org-name">${organization.name}${isActive ? ' <span class="badge">Current</span>' : ''}</div>
-          <div class="org-role">Role: ${membership.role.name || membership.role.slug} • Status: ${membership.status}</div>
+          <div class="org-info">
+            <span class="org-name">${organization.name}</span>
+            ${isActive ? '<span class="badge active">Current</span>' : ''}
+          </div>
+          <span class="org-role">${membership.role.name || membership.role.slug}</span>
         </div>
       `;
     }
 
     html += '</div>';
-    orgSwitcherContainer.innerHTML = html;
+    orgSwitcher.innerHTML = html;
 
-    // Add click handlers for org switching
-    const orgItems = orgSwitcherContainer.querySelectorAll('.org-item');
+    // Add click handlers
+    const orgItems = orgSwitcher.querySelectorAll('.org-item:not(.active)');
     orgItems.forEach(item => {
       item.addEventListener('click', async () => {
         const orgId = item.getAttribute('data-org-id');
-        if (orgId && orgId !== currentSession?.organizationId) {
+        if (orgId) {
           await handleOrganizationSwitch(orgId);
         }
       });
     });
   } catch (error) {
     console.error('Error loading organizations:', error);
-    orgSwitcherContainer.innerHTML = '<p class="text-muted">Failed to load organizations</p>';
+  }
+}
+
+async function handleLogin() {
+  try {
+    showStatus('Opening browser for authentication...', 'info');
+    const loginBtn = document.getElementById('loginBtn') as HTMLButtonElement;
+    if (loginBtn) {
+      loginBtn.disabled = true;
+    }
+
+    await auth.signIn();
+  } catch (error) {
+    console.error('Login error:', error);
+    showStatus(
+      `Error: ${error instanceof Error ? error.message : String(error)}`,
+      'error'
+    );
+    const loginBtn = document.getElementById('loginBtn') as HTMLButtonElement;
+    if (loginBtn) {
+      loginBtn.disabled = false;
+    }
+  }
+}
+
+async function handleRefresh() {
+  try {
+    showStatus('Refreshing session...', 'info');
+    const refreshBtn = document.getElementById('refreshBtn') as HTMLButtonElement;
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+    }
+
+    const session = await auth.refreshToken();
+    currentSession = session;
+
+    showStatus('✅ Session refreshed successfully!', 'success');
+    renderLoggedInState();
+  } catch (error) {
+    console.error('Refresh error:', error);
+    showStatus(
+      `Error: ${error instanceof Error ? error.message : String(error)}`,
+      'error'
+    );
+  } finally {
+    const refreshBtn = document.getElementById('refreshBtn') as HTMLButtonElement;
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+    }
+  }
+}
+
+async function handleSignOut() {
+  try {
+    await auth.signOut();
+    currentSession = null;
+    renderLoginState();
+    showStatus('Signed out successfully', 'info');
+  } catch (error) {
+    console.error('Sign out error:', error);
+    showStatus(
+      `Error: ${error instanceof Error ? error.message : String(error)}`,
+      'error'
+    );
   }
 }
 
@@ -441,16 +392,7 @@ async function handleOrganizationSwitch(organizationId: string) {
     currentSession = await auth.getSession();
 
     showStatus('✅ Organization switched successfully!', 'success');
-
-    // Refresh settings page
-    await renderSettingsPage();
-
-    // Refresh other pages if needed
-    if (currentPage === 'home') {
-      renderHomePage();
-    } else if (currentPage === 'account') {
-      renderAccountPage();
-    }
+    renderLoggedInState();
   } catch (error) {
     console.error('Error switching organization:', error);
     showStatus(
