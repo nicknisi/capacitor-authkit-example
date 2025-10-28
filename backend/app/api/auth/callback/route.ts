@@ -50,11 +50,34 @@ export async function POST(request: NextRequest) {
     }
 
     // Extract data from JWT claims
-    const roles = decodedToken.roles || [];
+    // Note: JWT claims can be strings or objects, normalize to objects
+    console.log('JWT claims:', {
+      roles: decodedToken.roles,
+      permissions: decodedToken.permissions,
+      entitlements: decodedToken.entitlements,
+      feature_flags: decodedToken.feature_flags,
+    });
+
+    const rawRoles = decodedToken.roles || [];
+    const roles = rawRoles.map((r: any) =>
+      typeof r === 'string' ? { slug: r, name: r } : r
+    );
     const role = roles.length > 0 ? roles[0] : null;
-    const permissions = decodedToken.permissions || [];
-    const entitlements = decodedToken.entitlements || [];
-    const featureFlags = decodedToken.feature_flags || [];
+
+    const rawPermissions = decodedToken.permissions || [];
+    const permissions = rawPermissions.map((p: any) =>
+      typeof p === 'string' ? { id: p, name: p } : p
+    );
+
+    const rawEntitlements = decodedToken.entitlements || [];
+    const entitlements = rawEntitlements.map((e: any) =>
+      typeof e === 'string' ? { id: e, name: e, value: true } : e
+    );
+
+    const rawFeatureFlags = decodedToken.feature_flags || [];
+    const featureFlags = rawFeatureFlags.map((f: any) =>
+      typeof f === 'string' ? { id: f, name: f, enabled: true } : f
+    );
 
     const response: AuthCallbackResponse = {
       accessToken: authResult.accessToken,

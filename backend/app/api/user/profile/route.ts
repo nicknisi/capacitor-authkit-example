@@ -42,11 +42,28 @@ export async function GET(request: NextRequest) {
       console.error('Error decoding JWT:', e);
     }
 
-    const roles = decodedToken.roles || [];
+    // Extract data from JWT claims
+    // Note: JWT claims can be strings or objects, normalize to objects
+    const rawRoles = decodedToken.roles || [];
+    const roles = rawRoles.map((r: any) =>
+      typeof r === 'string' ? { slug: r, name: r } : r
+    );
     const role = roles.length > 0 ? roles[0] : null;
-    const permissions = decodedToken.permissions || [];
-    const entitlements = decodedToken.entitlements || [];
-    const featureFlags = decodedToken.feature_flags || [];
+
+    const rawPermissions = decodedToken.permissions || [];
+    const permissions = rawPermissions.map((p: any) =>
+      typeof p === 'string' ? { id: p, name: p } : p
+    );
+
+    const rawEntitlements = decodedToken.entitlements || [];
+    const entitlements = rawEntitlements.map((e: any) =>
+      typeof e === 'string' ? { id: e, name: e, value: true } : e
+    );
+
+    const rawFeatureFlags = decodedToken.feature_flags || [];
+    const featureFlags = rawFeatureFlags.map((f: any) =>
+      typeof f === 'string' ? { id: f, name: f, enabled: true } : f
+    );
     const organizationId = decodedToken.org_id || null;
 
     const response: UserProfileResponse = {
