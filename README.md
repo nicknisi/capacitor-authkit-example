@@ -1,197 +1,357 @@
-# WorkOS OAuth for Mobile and Desktop Apps
+# Capacitor AuthKit Example
 
-This demo shows the OAuth authentication flow for platforms that cannot handle traditional web redirects, including:
-- Capacitor/Ionic apps
-- React Native apps
-- Desktop apps (Electron, Tauri)
-- Any non-web platform using WorkOS AuthKit
+Example showing how to use WorkOS AuthKit in a Capacitor mobile app with OAuth custom URL schemes.
 
-## The Problem
+## What This Demonstrates
 
-Web applications can redirect naturally during OAuth:
-1. Redirect user to WorkOS
+Mobile apps can't handle OAuth redirects like web apps. This example shows the complete flow:
+
+1. User clicks "Sign In" in your Capacitor app
+2. App opens system browser with WorkOS AuthKit
+3. User authenticates
+4. WorkOS redirects to your custom URL scheme (`workosauthdemo://callback`)
+5. iOS/Android intercepts the URL and returns to your app
+6. App extracts the code and exchanges it for tokens via your backend
+
+## Project Structure
+
+This is a pnpm workspace with two packages:
+
+```
+capacitor-authkit-example/
+├── backend/          # Express server handling OAuth token exchange
+└── capacitor-app/    # Capacitor app with iOS/Android projects
+```
+
+## Prerequisites
+
+- Node.js 18 or higher
+- pnpm (`npm install -g pnpm`)
+- Xcode (for iOS development)
+- Android Studio (for Android development)
+- WorkOS account with AuthKit configured
+
+## Quick Start
+
+### 1. Clone and Install
+
+```bash
+git clone <your-repo>
+cd capacitor-authkit-example
+pnpm install
+```
+
+This installs dependencies for both the backend and Capacitor app.
+
+### 2. Configure WorkOS
+
+Get your credentials from [WorkOS Dashboard](https://dashboard.workos.com/):
+
+1. Copy backend environment file:
+   ```bash
+   cp backend/.env.example backend/.env
+   ```
+
+2. Edit `backend/.env` with your WorkOS credentials:
+   ```bash
+   WORKOS_API_KEY=sk_test_...
+   WORKOS_CLIENT_ID=client_...
+   ```
+
+3. Add redirect URI to WorkOS Dashboard:
+   - Go to: WorkOS Dashboard → Your Application → Configuration → Redirect URIs
+   - Add: `workosauthdemo://callback`
+
+### 3. Run Both Apps
+
+Start the backend and Capacitor dev server together:
+
+```bash
+pnpm dev
+```
+
+This runs:
+- Backend server on `http://localhost:3001`
+- Capacitor dev server on `http://localhost:5173`
+
+You can also run them separately:
+
+```bash
+pnpm dev:backend     # Backend only
+pnpm dev:app         # Capacitor app only
+```
+
+### 4. Run on iOS Simulator
+
+```bash
+# Build web assets
+pnpm -F capacitor-app build
+
+# First time only: Add iOS platform
+pnpm -F capacitor-app exec cap add ios
+
+# Sync to iOS
+pnpm sync:ios
+
+# Open in Xcode
+pnpm -F capacitor-app open:ios
+```
+
+Click ▶ in Xcode to run on the simulator.
+
+Or use the CLI to run directly:
+
+```bash
+pnpm -F capacitor-app run:ios
+```
+
+### 5. Run on Android
+
+```bash
+# Build web assets
+pnpm -F capacitor-app build
+
+# First time only: Add Android platform
+pnpm -F capacitor-app exec cap add android
+
+# Sync to Android
+pnpm sync:android
+
+# Open in Android Studio
+pnpm -F capacitor-app open:android
+```
+
+Click ▶ in Android Studio to run on the emulator.
+
+Or use the CLI:
+
+```bash
+pnpm -F capacitor-app run:android
+```
+
+## Testing on Real Devices
+
+Real devices can't reach `localhost`. You need to expose your backend:
+
+### Option 1: Use ngrok
+
+```bash
+# Install ngrok
+npm install -g ngrok
+
+# Expose backend
+ngrok http 3001
+```
+
+Update `capacitor-app/src/config.ts` with the ngrok URL:
+
+```typescript
+export const CONFIG = {
+  BACKEND_URL: 'https://abc123.ngrok.io',  // Your ngrok URL
+  // ...
+};
+```
+
+### Option 2: Use Your Machine's IP
+
+Find your local IP:
+
+```bash
+# macOS/Linux
+ifconfig | grep "inet "
+
+# Windows
+ipconfig
+```
+
+Update `capacitor-app/src/config.ts`:
+
+```typescript
+export const CONFIG = {
+  BACKEND_URL: 'http://192.168.1.100:3001',  // Your IP
+  // ...
+};
+```
+
+Make sure your device is on the same network as your machine.
+
+### Rebuild After Config Changes
+
+```bash
+pnpm -F capacitor-app build
+pnpm sync
+```
+
+Then run on your device from Xcode or Android Studio.
+
+## Available Scripts
+
+### Root Scripts
+
+```bash
+pnpm dev              # Run backend + app dev servers
+pnpm dev:backend      # Run backend only
+pnpm dev:app          # Run Capacitor app only
+pnpm build            # Build all packages
+pnpm sync             # Sync Capacitor to all platforms
+pnpm sync:ios         # Sync to iOS only
+pnpm sync:android     # Sync to Android only
+```
+
+### Backend Scripts
+
+```bash
+pnpm -F backend dev         # Run with hot reload
+pnpm -F backend start       # Run without hot reload
+```
+
+### Capacitor App Scripts
+
+```bash
+pnpm -F capacitor-app dev           # Vite dev server
+pnpm -F capacitor-app build         # Build web assets
+pnpm -F capacitor-app sync          # Sync to all platforms
+pnpm -F capacitor-app sync:ios      # Sync to iOS
+pnpm -F capacitor-app sync:android  # Sync to Android
+pnpm -F capacitor-app open:ios      # Open in Xcode
+pnpm -F capacitor-app open:android  # Open in Android Studio
+pnpm -F capacitor-app run:ios       # Build and run on iOS
+pnpm -F capacitor-app run:android   # Build and run on Android
+```
+
+## How It Works
+
+### Mobile OAuth vs Web OAuth
+
+**Web OAuth:**
+```
+1. Redirect to WorkOS
 2. User authenticates
-3. WorkOS redirects back to your app
+3. WorkOS redirects back to your domain
+4. Your server handles the callback route
+```
 
-Native and desktop apps cannot handle redirects the same way. They need to:
-1. Open a system browser with WorkOS URL
-2. Register a custom URL scheme to receive the callback
-3. Extract the authorization code
-4. Exchange the code for tokens on the backend
+**Mobile OAuth (this example):**
+```
+1. Open system browser with WorkOS URL
+2. User authenticates
+3. WorkOS redirects to: workosauthdemo://callback?code=...
+4. iOS/Android intercepts the custom URL
+5. App receives the URL via App.addListener('appUrlOpen')
+6. App extracts code and sends to backend
+7. Backend exchanges code for tokens
+```
 
-## The OAuth Protocol Flow
+### Key Components
+
+**Custom URL Scheme Registration** (`capacitor-app/capacitor.config.ts`):
+```typescript
+{
+  ios: { scheme: 'workosauthdemo' },
+  android: { scheme: 'workosauthdemo' }
+}
+```
+
+**URL Callback Handler** (`capacitor-app/src/auth.ts`):
+```typescript
+App.addListener('appUrlOpen', async (event) => {
+  const url = new URL(event.url);
+  const code = url.searchParams.get('code');
+  await exchangeCodeForTokens(code);
+});
+```
+
+**Backend Token Exchange** (`backend/server.js`):
+```javascript
+const { user, accessToken, refreshToken } =
+  await workos.userManagement.authenticateWithCode({
+    clientId: process.env.WORKOS_CLIENT_ID,
+    code: authorizationCode,
+  });
+```
+
+## Common Issues
+
+### "Invalid redirect_uri" Error
+
+WorkOS doesn't recognize your custom URL scheme.
+
+**Fix:**
+1. Check WorkOS Dashboard → Redirect URIs
+2. Add: `workosauthdemo://callback`
+3. Scheme must match exactly (case-sensitive)
+
+### Callback Not Received
+
+Custom URL scheme not registered in iOS/Android project.
+
+**Fix:**
+```bash
+pnpm -F capacitor-app build
+pnpm sync
+```
+
+Check that:
+- iOS: `ios/App/App/Info.plist` has `CFBundleURLTypes`
+- Android: `android/app/src/main/AndroidManifest.xml` has intent filter
+
+### Backend Connection Fails
+
+Device can't reach `localhost`.
+
+**Fix:**
+- iOS Simulator: `localhost` works
+- Android Emulator: Use `10.0.2.2` instead of `localhost`
+- Real Device: Use ngrok or your machine's IP address
+
+### Xcode Scheme Error
+
+If you get "scheme named 'workosauthdemo' does not exist", the iOS platform has stale configuration.
+
+**Fix:**
+```bash
+rm -rf capacitor-app/ios
+pnpm -F capacitor-app exec cap add ios
+pnpm sync:ios
+```
+
+## Project Documentation
+
+- [Backend API Documentation](backend/README.md) - API endpoints and testing
+- [Capacitor App Implementation](capacitor-app/README.md) - Code walkthrough and platform details
+
+## Security Best Practices
+
+1. **Never store client secret in the app** - Always exchange code on backend
+2. **Use secure storage** - Keychain (iOS) / Keystore (Android) for production
+3. **Validate state parameter** - Prevent CSRF attacks
+4. **Implement token refresh** - Don't force users to re-authenticate
+5. **Verify tokens on backend** - Never trust client-provided tokens
+
+## OAuth Protocol Reference
 
 ### Step 1: Generate Authorization URL
 
-Build the WorkOS authorization URL with required parameters:
-
 ```
 GET https://api.workos.com/user_management/authorize
-  ?client_id={YOUR_CLIENT_ID}
-  &redirect_uri={YOUR_CALLBACK_URL}
+  ?client_id=client_123
+  &redirect_uri=workosauthdemo://callback
   &response_type=code
-  &state={OPTIONAL_STATE}
-  &organization_id={OPTIONAL_ORG_ID}
+  &state=abc123
 ```
 
-**Required Parameters:**
-- `client_id`: Your WorkOS Client ID
-- `redirect_uri`: Where WorkOS should redirect after auth (must use custom scheme for mobile)
-- `response_type`: Always `code` for authorization code flow
+### Step 2: User Authenticates
 
-**Optional Parameters:**
-- `state`: CSRF protection token and/or routing information
-- `organization_id`: Pre-select an organization
-- `screen_hint`: `sign-in` or `sign-up` to show specific screen
+WorkOS AuthKit handles the entire authentication UI.
 
-**Example:**
+### Step 3: Receive Callback
+
+WorkOS redirects to:
 ```
-https://api.workos.com/user_management/authorize?client_id=client_123&redirect_uri=myapp://auth/callback&response_type=code&state=abc123
+workosauthdemo://callback?code=01ABCDEF...&state=abc123
 ```
 
-### Step 2: Open Browser
-
-Open this URL in the system browser. The implementation differs by platform:
-
-**iOS (ASWebAuthenticationSession):**
-```swift
-import AuthenticationServices
-
-let session = ASWebAuthenticationSession(
-    url: authURL,
-    callbackURLScheme: "myapp"
-) { callbackURL, error in
-    // Handle callback
-}
-session.start()
-```
-
-**Android (Custom Tabs):**
-```kotlin
-val intent = CustomTabsIntent.Builder().build()
-intent.launchUrl(context, Uri.parse(authUrl))
-```
-
-**Capacitor:**
-```typescript
-import { Browser } from '@capacitor/browser';
-
-await Browser.open({ url: authorizationUrl });
-```
-
-**React Native:**
-```typescript
-import { Linking } from 'react-native';
-
-Linking.openURL(authorizationUrl);
-```
-
-**Tauri:**
-```rust
-use tauri::api::shell;
-
-shell::open(&shell_scope, authUrl, None)?;
-```
-
-### Step 3: User Authenticates
-
-User completes authentication in WorkOS AuthKit:
-- Enters credentials
-- Completes SSO flow
-- Completes MFA if required
-- Accepts organization invitation
-
-### Step 4: Receive Callback
-
-WorkOS redirects to your callback URL with the authorization code:
-
-```
-myapp://auth/callback?code=01ABCDEF...&state=abc123
-```
-
-**Query Parameters:**
-- `code`: Authorization code (single-use, expires in 10 minutes)
-- `state`: The same state you provided in Step 1
-
-Platform-specific callback handling:
-
-**iOS (ASWebAuthenticationSession):**
-```swift
-// Handled automatically in the completion handler from Step 2
-```
-
-**Android:**
-```kotlin
-// In AndroidManifest.xml:
-<intent-filter>
-    <action android:name="android.intent.action.VIEW" />
-    <category android:name="android.intent.category.DEFAULT" />
-    <category android:name="android.intent.category.BROWSABLE" />
-    <data android:scheme="myapp" android:host="auth" />
-</intent-filter>
-
-// In your Activity:
-override fun onNewIntent(intent: Intent?) {
-    super.onNewIntent(intent)
-    val data: Uri? = intent?.data
-    val code = data?.getQueryParameter("code")
-}
-```
-
-**Capacitor:**
-```typescript
-import { App } from '@capacitor/app';
-
-App.addListener('appUrlOpen', (event) => {
-    const url = new URL(event.url);
-    const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state');
-    // Send code to backend
-});
-```
-
-**React Native:**
-```typescript
-import { Linking } from 'react-native';
-
-Linking.addEventListener('url', (event) => {
-    const url = new URL(event.url);
-    const code = url.searchParams.get('code');
-    // Send code to backend
-});
-```
-
-### Step 5: Exchange Code for Tokens (Backend)
-
-**Critical: This MUST happen on your backend** because it requires your client secret.
-
-Your mobile app sends the authorization code to your backend:
-
-```typescript
-// Mobile app
-const response = await fetch('https://your-backend.com/api/auth/mobile', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code })
-});
-
-const { accessToken, refreshToken, user } = await response.json();
-```
-
-Your backend exchanges the code for tokens:
-
-```javascript
-// Backend (Node.js)
-const workos = new WorkOS(process.env.WORKOS_API_KEY);
-
-const { user, accessToken, refreshToken, organizationId } =
-    await workos.userManagement.authenticateWithCode({
-        clientId: process.env.WORKOS_CLIENT_ID,
-        code: authorizationCode,
-    });
-```
-
-Under the hood, this makes a server-to-server request:
+### Step 4: Exchange Code for Tokens (Backend)
 
 ```bash
 curl -X POST https://api.workos.com/user_management/authenticate \
@@ -204,92 +364,21 @@ curl -X POST https://api.workos.com/user_management/authenticate \
   }'
 ```
 
-**Response:**
+Returns:
 ```json
 {
-    "access_token": "eyJhbGc...",
-    "refresh_token": "ey_refresh...",
-    "user": {
-        "id": "user_01HGXY...",
-        "email": "user@example.com",
-        "first_name": "John",
-        "last_name": "Doe",
-        "email_verified": true,
-        "profile_picture_url": "https://...",
-        "object": "user",
-        "created_at": "2024-01-01T00:00:00Z",
-        "updated_at": "2024-01-01T00:00:00Z"
-    },
-    "organization_id": "org_01HGXY...",
-    "impersonator": null
+  "access_token": "eyJhbGc...",
+  "refresh_token": "ey_refresh...",
+  "user": {
+    "id": "user_01...",
+    "email": "user@example.com",
+    "first_name": "John",
+    "last_name": "Doe"
+  }
 }
 ```
 
-### Step 6: Store Tokens Securely
-
-Store tokens in secure platform-specific storage:
-
-**iOS:**
-```swift
-import Security
-
-// Store in Keychain
-let query: [String: Any] = [
-    kSecClass as String: kSecClassGenericPassword,
-    kSecAttrAccount as String: "accessToken",
-    kSecValueData as String: tokenData
-]
-SecItemAdd(query as CFDictionary, nil)
-```
-
-**Android:**
-```kotlin
-import androidx.security.crypto.EncryptedSharedPreferences
-
-val sharedPreferences = EncryptedSharedPreferences.create(
-    "secure_prefs",
-    MasterKey.DEFAULT_MASTER_KEY_ALIAS,
-    context,
-    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-)
-
-sharedPreferences.edit()
-    .putString("access_token", accessToken)
-    .apply()
-```
-
-**Capacitor:**
-```typescript
-import { Preferences } from '@capacitor/preferences';
-
-await Preferences.set({
-    key: 'access_token',
-    value: accessToken
-});
-```
-
-**React Native:**
-```typescript
-import * as SecureStore from 'expo-secure-store';
-
-await SecureStore.setItemAsync('access_token', accessToken);
-```
-
-### Step 7: Refresh Tokens
-
-Access tokens expire (typically after 1 hour). Use the refresh token to get new tokens:
-
-```javascript
-// Backend
-const { accessToken, refreshToken } =
-    await workos.userManagement.authenticateWithRefreshToken({
-        clientId: process.env.WORKOS_CLIENT_ID,
-        refreshToken: storedRefreshToken,
-    });
-```
-
-This makes a POST request:
+### Step 5: Refresh Tokens
 
 ```bash
 curl -X POST https://api.workos.com/user_management/authenticate \
@@ -302,208 +391,26 @@ curl -X POST https://api.workos.com/user_management/authenticate \
   }'
 ```
 
-## RBAC and Authorization
-
-After authentication, you need to fetch role and permission data for authorization.
-
-### Getting User Roles
-
-WorkOS stores roles in the Directory (organization members):
-
-```javascript
-// Backend
-const directoryUser = await workos.directorySync.listDirectoryUsers({
-    directory: organizationId,
-    user: userId,
-});
-
-const roles = directoryUser.data[0]?.groups || [];
-```
-
-Or use the UserManagement API:
-
-```javascript
-const orgMembership = await workos.userManagement.getOrganizationMembership({
-    organizationId,
-    userId,
-});
-
-const role = orgMembership.role;
-```
-
-### Middleware Pattern
-
-Create backend middleware that checks roles:
-
-```javascript
-// Express middleware
-async function requireRole(requiredRole) {
-    return async (req, res, next) => {
-        const token = req.headers.authorization?.replace('Bearer ', '');
-
-        // Verify token and get user
-        const { user, organizationId } = await verifyToken(token);
-
-        // Get user's role
-        const membership = await workos.userManagement.getOrganizationMembership({
-            organizationId,
-            userId: user.id,
-        });
-
-        if (membership.role.slug !== requiredRole) {
-            return res.status(403).json({ error: 'Insufficient permissions' });
-        }
-
-        req.user = user;
-        req.organizationId = organizationId;
-        next();
-    };
-}
-
-// Usage
-app.get('/api/admin/users', requireRole('admin'), async (req, res) => {
-    // Only accessible to admins
-});
-```
-
-## Common Issues and Solutions
-
-### Issue: "Invalid redirect_uri"
-
-**Cause:** WorkOS doesn't recognize your callback URL.
-
-**Solution:** Add your custom URL scheme to allowed redirects in WorkOS Dashboard:
-- Development: `myapp://auth/callback`
-- Production: Use the same scheme or a different one
-
-### Issue: "Code has already been used"
-
-**Cause:** Authorization codes are single-use. You tried to exchange it twice.
-
-**Solution:** Only call the token exchange endpoint once per code.
-
-### Issue: "Client authentication failed"
-
-**Cause:** Client secret is incorrect or the code exchange is happening client-side.
-
-**Solution:** Verify your client secret and ensure exchange happens on backend.
-
-### Issue: Callback not received
-
-**Cause:** Custom URL scheme not registered properly.
-
-**Solution:**
-- iOS: Check `Info.plist` has URL scheme registered
-- Android: Check `AndroidManifest.xml` has intent filter
-- Capacitor: Ensure `appUrlOpen` listener is registered before opening browser
-
-### Issue: State mismatch
-
-**Cause:** The state parameter doesn't match what you sent.
-
-**Solution:** Store the state before starting auth and verify it matches on callback.
-
-## Security Best Practices
-
-1. **Never store client secret in mobile app** - Always exchange code on backend
-2. **Always validate state parameter** - Prevents CSRF attacks
-3. **Use secure storage** - Keychain (iOS), Keystore (Android), not localStorage
-4. **Implement token refresh** - Don't force users to re-authenticate
-5. **Use PKCE** (optional but recommended) - Additional security layer for public clients
-6. **Validate tokens on backend** - Never trust client-provided tokens without verification
-
-## Platform-Specific Considerations
-
-### Capacitor/Ionic
-
-Capacitor provides plugins that handle most complexity:
-- `@capacitor/browser` - Opens system browser
-- `@capacitor/app` - Handles URL callbacks
-- `@capacitor/preferences` - Secure storage
-
-The flow is nearly identical to web development.
-
-### React Native
-
-React Native requires more manual setup:
-- Deep linking configuration in both iOS and Android
-- Manual URL scheme registration
-- Use `react-native-app-auth` library for abstraction
-
-### Tauri
-
-Tauri desktop apps face similar challenges:
-- Register custom protocol handler
-- Open system browser for auth
-- Listen for protocol callback
-- Same backend token exchange
-
-### Native iOS/Android
-
-Building native apps requires:
-- iOS: `ASWebAuthenticationSession` (recommended) or custom implementation
-- Android: Chrome Custom Tabs or WebView
-- Manual URL scheme handling
-- Native secure storage implementation
-
-## Three Demo Implementations
-
-This demo includes three different implementations:
-
-### 1. Capacitor App (Recommended for Mobile)
-
-**Location:** `/capacitor-app`
-
-Real mobile implementation using Capacitor with custom URL schemes. This shows exactly how OAuth works in a native mobile app.
-
-**Use this if you want to:**
-- Understand mobile OAuth with custom URL schemes
-- See how iOS/Android intercept callback URLs
-- Learn what your Capacitor plugin should do
-
-[Read Capacitor App README](capacitor-app/README.md)
-
-### 2. Backend Server (Required)
-
-**Location:** `/backend`
-
-Express server that handles token exchange. Required by both frontend demos.
-
-[Read Backend README](backend/README.md)
-
-### 3. HTML Demo (Web Reference)
-
-**Location:** `/frontend`
-
-Simple HTML page showing the protocol. Good for understanding the API calls, but doesn't demonstrate mobile-specific behavior.
-
-[Read Frontend README](frontend/README.md)
-
-## Quick Start
-
-See [QUICKSTART.md](QUICKSTART.md) for a 5-minute setup guide.
-
-For mobile development, start with the Capacitor app:
-
-```bash
-# 1. Start backend
-cd backend
-npm install && cp .env.example .env
-# Edit .env with your WorkOS credentials
-npm start
-
-# 2. Setup Capacitor app
-cd ../capacitor-app
-npm install
-npm run build
-npx cap add ios  # or android
-npm run sync
-npm run open:ios  # or open:android
-```
-
-## Additional Resources
+## Adapting for Your App
+
+To use this pattern in your own Capacitor app:
+
+1. **Choose your URL scheme** (e.g., `myapp://`)
+2. **Update `capacitor.config.ts`**:
+   ```typescript
+   {
+     appId: 'com.mycompany.myapp',
+     ios: { scheme: 'myapp' },
+     android: { scheme: 'myapp' }
+   }
+   ```
+3. **Update WorkOS redirect URI** to `myapp://callback`
+4. **Copy auth logic** from `capacitor-app/src/auth.ts`
+5. **Run `cap sync`** to apply changes
+
+## Resources
 
 - [WorkOS AuthKit Documentation](https://workos.com/docs/user-management/authkit)
 - [WorkOS User Management API](https://workos.com/docs/reference/user-management)
-- [OAuth 2.0 Specification](https://oauth.net/2/)
-- [PKCE Specification](https://oauth.net/2/pkce/)
+- [Capacitor Documentation](https://capacitorjs.com/docs)
+- [OAuth 2.0 for Native Apps (RFC 8252)](https://www.rfc-editor.org/rfc/rfc8252)

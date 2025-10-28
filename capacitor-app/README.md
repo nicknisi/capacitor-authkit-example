@@ -1,369 +1,435 @@
-# Capacitor OAuth Demo
+# Capacitor App
 
-Real mobile OAuth implementation showing how to authenticate with WorkOS in a Capacitor app using custom URL schemes.
+Capacitor mobile app demonstrating WorkOS AuthKit integration with custom URL schemes.
 
-## What's Different from Web OAuth?
+## How Mobile OAuth Works
 
-### Web OAuth Flow:
-```
-1. window.location.href = authUrl  // Redirect
-2. User authenticates
-3. Server redirects back to /callback
-4. Server handles the callback route
-```
+Mobile apps can't handle HTTP redirects like web apps. Instead, they use custom URL schemes:
 
-### Mobile OAuth Flow (this demo):
-```
-1. Browser.open(authUrl)  // Opens system browser
-2. User authenticates
-3. WorkOS redirects to: workosauthdemo://callback?code=...
-4. iOS/Android intercepts the custom URL scheme
-5. App.addListener('appUrlOpen') fires with the URL
-6. App parses the URL and extracts the code
-7. App sends code to backend for token exchange
-```
+1. App opens system browser with WorkOS URL
+2. User authenticates in browser
+3. WorkOS redirects to custom scheme: `workosauthdemo://callback?code=...`
+4. OS intercepts the URL and returns to your app
+5. App receives URL via callback listener
+6. App sends code to backend for token exchange
 
-## Key Files to Understand
+## Key Implementation Files
 
-### `src/auth.ts` - The Core OAuth Logic
+### src/auth.ts
 
-This is what your Capacitor plugin needs to do:
+Core authentication logic. This is the heart of the mobile OAuth implementation.
 
 ```typescript
-// 1. Listen for the custom URL callback
+// 1. Register URL callback listener
 App.addListener('appUrlOpen', async (event) => {
   const url = new URL(event.url);
   const code = url.searchParams.get('code');
-
-  // 2. Send code to backend
   await exchangeCodeForTokens(code);
 });
 
-// 3. Start auth by opening browser
-await Browser.open({ url: authorizationUrl });
+// 2. Start auth flow
+export async function login() {
+  const authUrl = await getAuthorizationUrl();
+  await Browser.open({ url: authUrl });
+}
+
+// 3. Exchange code for tokens
+async function exchangeCodeForTokens(code: string) {
+  const response = await fetch(`${CONFIG.BACKEND_URL}/auth/callback`, {
+    method: 'POST',
+    body: JSON.stringify({ code })
+  });
+  const { accessToken, user } = await response.json();
+  await Preferences.set({ key: 'access_token', value: accessToken });
+}
 ```
 
-That's it. The rest is just UI and storage.
+**Key points:**
+- `App.addListener` must be registered before opening the browser
+- `Browser.open()` opens the system browser (Safari on iOS, Chrome on Android)
+- Browser automatically closes when redirect happens
+- Code exchange happens on backend to protect client secret
 
-### `capacitor.config.ts` - Register Your URL Scheme
+### src/config.ts
+
+Configuration for backend URL and URL scheme.
 
 ```typescript
-{
+export const CONFIG = {
+  BACKEND_URL: 'http://localhost:3001',
+  URL_SCHEME: 'workosauthdemo',
+  REDIRECT_URI: 'workosauthdemo://callback'
+};
+```
+
+**Important:** Update `BACKEND_URL` for different environments:
+- iOS Simulator: `http://localhost:3001`
+- Android Emulator: `http://10.0.2.2:3001`
+- Real Device: `http://YOUR_IP:3001` or ngrok URL
+
+### capacitor.config.ts
+
+Registers the custom URL scheme with iOS and Android.
+
+```typescript
+const config: CapacitorConfig = {
   appId: 'com.workos.authdemo',
+  appName: 'WorkOS Auth Demo',
+  webDir: 'dist',
   ios: {
     scheme: 'workosauthdemo'
   },
   android: {
     scheme: 'workosauthdemo'
   }
-}
+};
 ```
+
+When you run `cap sync`, Capacitor automatically:
+- Adds URL scheme to iOS `Info.plist`
+- Adds intent filter to Android `AndroidManifest.xml`
 
 ### Platform-Specific Configuration
 
-**iOS:** `ios-url-scheme.xml` shows what gets added to Info.plist
+**iOS** (`ios-url-scheme.xml`):
 
-**Android:** `android-intent-filter.xml` shows the manifest configuration
+This shows what gets added to `Info.plist`:
 
-## Setup
-
-### 1. Install Dependencies
-
-```bash
-npm install
+```xml
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLName</key>
+    <string>com.workos.authdemo</string>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>workosauthdemo</string>
+    </array>
+  </dict>
+</array>
 ```
 
-### 2. Configure Backend URL
+**Android** (`android-intent-filter.xml`):
 
-Edit `src/config.ts` and set your backend URL:
+This shows what gets added to `AndroidManifest.xml`:
+
+```xml
+<intent-filter android:autoVerify="true">
+  <action android:name="android.intent.action.VIEW" />
+  <category android:name="android.intent.category.DEFAULT" />
+  <category android:name="android.intent.category.BROWSABLE" />
+  <data android:scheme="workosauthdemo" android:host="callback" />
+</intent-filter>
+```
+
+## Running
+
+From workspace root:
+
+```bash
+# Build web assets
+pnpm -F capacitor-app build
+
+# Sync to platforms
+pnpm sync:ios     # iOS only
+pnpm sync:android # Android only
+pnpm sync         # Both
+
+# Run on device
+pnpm -F capacitor-app run:ios
+pnpm -F capacitor-app run:android
+```
+
+## Development Workflow
+
+### Making Code Changes
+
+1. Edit files in `src/`
+2. Build: `pnpm build`
+3. Sync: `pnpm sync`
+4. Run from Xcode/Android Studio
+
+### Live Reload (Web Only)
+
+For faster development of UI:
+
+```bash
+pnpm dev
+```
+
+This runs Vite dev server with hot reload. Test OAuth flow on native devices after.
+
+### Testing on Real Devices
+
+Update `src/config.ts` with your machine's IP or ngrok URL:
 
 ```typescript
-// For local development with iOS simulator:
-BACKEND_URL: 'http://localhost:3001'
-
-// For Android emulator:
-BACKEND_URL: 'http://10.0.2.2:3001'
-
-// For real device (use your machine's IP):
-BACKEND_URL: 'http://192.168.1.100:3001'
-
-// For production (use your deployed backend):
-BACKEND_URL: 'https://your-backend.com'
+export const CONFIG = {
+  BACKEND_URL: 'https://abc123.ngrok.io',  // ngrok URL
+  // or
+  BACKEND_URL: 'http://192.168.1.100:3001',  // Your IP
+};
 ```
 
-### 3. Configure WorkOS Dashboard
-
-Add the redirect URI to your WorkOS application:
-
-```
-workosauthdemo://callback
-```
-
-Go to: WorkOS Dashboard → Your Application → Configuration → Redirect URIs
-
-### 4. Build the Web Assets
+Then rebuild and sync:
 
 ```bash
-npm run build
+pnpm build
+pnpm sync
 ```
 
-### 5. Sync with Native Projects
+## Capacitor Plugins Used
 
-```bash
-# Initialize iOS and Android projects (first time only)
-npx cap add ios
-npx cap add android
+### @capacitor/app
 
-# Sync the web assets and configuration
-npm run sync
-```
-
-This will:
-- Copy your built web assets to native projects
-- Register the custom URL scheme in iOS Info.plist
-- Add the intent filter to Android AndroidManifest.xml
-
-### 6. Open in Xcode or Android Studio
-
-```bash
-# iOS
-npm run open:ios
-
-# Android
-npm run open:android
-```
-
-## Running the App
-
-### iOS Simulator
-
-```bash
-npm run build
-npm run sync:ios
-npm run open:ios
-```
-
-Then click ▶ in Xcode to run.
-
-### Android Emulator
-
-```bash
-npm run build
-npm run sync:android
-npm run open:android
-```
-
-Then click ▶ in Android Studio to run.
-
-### Real Device
-
-For testing on a real device, you need to:
-
-1. Make your backend accessible to the device:
-   ```bash
-   # Option 1: Use ngrok
-   ngrok http 3001
-
-   # Option 2: Use your machine's IP
-   # Find your IP: ifconfig (macOS/Linux) or ipconfig (Windows)
-   # Update BACKEND_URL in src/config.ts to http://YOUR_IP:3001
-   ```
-
-2. Update the backend URL in `src/config.ts`
-
-3. Rebuild and sync:
-   ```bash
-   npm run build
-   npm run sync
-   ```
-
-4. Run on device from Xcode or Android Studio
-
-## Testing the Flow
-
-1. Click "Sign In with WorkOS"
-2. System browser opens with WorkOS AuthKit
-3. Sign up or sign in
-4. Browser redirects to `workosauthdemo://callback?code=...`
-5. System intercepts and returns to your app
-6. App extracts the code and exchanges it for tokens
-7. User information is displayed
-
-## What Happens Under the Hood
-
-### Step 1: Generate Authorization URL
+Handles URL callbacks from OAuth redirect.
 
 ```typescript
-// App calls backend
-POST /auth/url
-{ "redirectUri": "workosauthdemo://callback" }
+import { App } from '@capacitor/app';
 
-// Backend generates WorkOS URL
-https://api.workos.com/user_management/authorize?
-  client_id=...
-  &redirect_uri=workosauthdemo://callback
-  &response_type=code
-```
-
-### Step 2: Open Browser
-
-```typescript
-await Browser.open({
-  url: "https://api.workos.com/user_management/authorize?..."
+App.addListener('appUrlOpen', (event) => {
+  // event.url = "workosauthdemo://callback?code=..."
+  console.log('Received URL:', event.url);
 });
 ```
 
-User authenticates in the system browser (Safari on iOS, Chrome on Android).
+### @capacitor/browser
 
-### Step 3: WorkOS Redirects
+Opens system browser for authentication.
 
-After authentication, WorkOS redirects to:
+```typescript
+import { Browser } from '@capacitor/browser';
+
+await Browser.open({
+  url: 'https://api.workos.com/user_management/authorize?...'
+});
+```
+
+Browser automatically closes when redirect occurs.
+
+### @capacitor/preferences
+
+Stores tokens on device.
+
+```typescript
+import { Preferences } from '@capacitor/preferences';
+
+// Store
+await Preferences.set({
+  key: 'access_token',
+  value: token
+});
+
+// Retrieve
+const { value } = await Preferences.get({ key: 'access_token' });
+
+// Delete
+await Preferences.remove({ key: 'access_token' });
+```
+
+**Production Note:** For production apps, use secure storage:
+- iOS: `@capacitor-community/secure-storage-plugin` (Keychain)
+- Android: `@capacitor-community/secure-storage-plugin` (Keystore)
+
+## Authentication Flow Walkthrough
+
+### 1. User Clicks "Sign In"
+
+```typescript
+// main.ts
+document.getElementById('login').addEventListener('click', async () => {
+  await login();
+});
+```
+
+### 2. Get Authorization URL from Backend
+
+```typescript
+// auth.ts
+async function getAuthorizationUrl() {
+  const response = await fetch(`${CONFIG.BACKEND_URL}/auth/url`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      redirectUri: CONFIG.REDIRECT_URI
+    })
+  });
+  const { authorizationUrl } = await response.json();
+  return authorizationUrl;
+}
+```
+
+### 3. Open System Browser
+
+```typescript
+await Browser.open({ url: authorizationUrl });
+```
+
+iOS uses Safari, Android uses Chrome.
+
+### 4. User Authenticates
+
+User completes authentication in WorkOS AuthKit (running in the browser).
+
+### 5. WorkOS Redirects
+
+After successful authentication, WorkOS redirects to:
 ```
 workosauthdemo://callback?code=01ABCDEF...&state=xyz
 ```
 
-### Step 4: System Captures Callback
-
-iOS/Android intercepts this URL because you registered the scheme.
-
-The browser closes automatically and your app comes to foreground.
-
-### Step 5: App Receives URL
+### 6. App Receives Callback
 
 ```typescript
-App.addListener('appUrlOpen', (event) => {
-  // event.url = "workosauthdemo://callback?code=01ABCDEF...&state=xyz"
-  const url = new URL(event.url);
-  const code = url.searchParams.get('code'); // "01ABCDEF..."
+App.addListener('appUrlOpen', async (event) => {
+  if (event.url.includes('callback')) {
+    const url = new URL(event.url);
+    const code = url.searchParams.get('code');
+    await exchangeCodeForTokens(code);
+  }
 });
 ```
 
-### Step 6: Exchange Code for Tokens
+### 7. Exchange Code for Tokens
 
 ```typescript
-// App calls backend with code
-POST /auth/callback
-{ "code": "01ABCDEF..." }
+async function exchangeCodeForTokens(code: string) {
+  const response = await fetch(`${CONFIG.BACKEND_URL}/auth/callback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code })
+  });
 
-// Backend calls WorkOS with client secret
-POST https://api.workos.com/user_management/authenticate
-{
-  "client_id": "...",
-  "client_secret": "sk_...",  // SECRET - never in mobile app
-  "code": "01ABCDEF...",
-  "grant_type": "authorization_code"
+  const { accessToken, refreshToken, user } = await response.json();
+
+  // Store tokens
+  await Preferences.set({ key: 'access_token', value: accessToken });
+  await Preferences.set({ key: 'refresh_token', value: refreshToken });
+
+  // Update UI
+  displayUserInfo(user);
 }
-
-// Backend receives tokens
-{
-  "access_token": "eyJ...",
-  "refresh_token": "ey_...",
-  "user": { ... }
-}
-
-// Backend returns to app (without client secret)
 ```
 
-### Step 7: Store Tokens
+### 8. Use Access Token
 
 ```typescript
-await Preferences.set({
-  key: 'access_token',
-  value: accessToken
-});
-```
+async function callProtectedAPI() {
+  const { value: token } = await Preferences.get({ key: 'access_token' });
 
-In production, use secure storage:
-- iOS: Keychain via `@capacitor-community/secure-storage-plugin`
-- Android: Keystore/EncryptedSharedPreferences
+  const response = await fetch(`${CONFIG.BACKEND_URL}/api/protected`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  return await response.json();
+}
+```
 
 ## Common Issues
 
-### "Invalid redirect_uri" Error
-
-**Cause:** WorkOS doesn't recognize your custom URL scheme.
-
-**Solution:**
-1. Check WorkOS Dashboard → Redirect URIs
-2. Make sure you added: `workosauthdemo://callback`
-3. Scheme must match exactly (case-sensitive)
-
 ### Callback Not Received
 
-**Cause:** Custom URL scheme not registered properly.
+**Problem:** URL listener doesn't fire after authentication.
 
-**Solution:**
-1. Run `npm run sync` to regenerate native configs
-2. iOS: Check `ios/App/App/Info.plist` has CFBundleURLTypes
-3. Android: Check `android/app/src/main/AndroidManifest.xml` has intent-filter
-4. Clean and rebuild the native projects
+**Solutions:**
+1. Ensure `App.addListener` is called before opening browser
+2. Check URL scheme is registered: `cap sync`
+3. Verify WorkOS Dashboard has correct redirect URI
+4. Check iOS/Android configuration files
+
+### "Invalid redirect_uri"
+
+**Problem:** WorkOS rejects the redirect URI.
+
+**Solution:** Add `workosauthdemo://callback` to WorkOS Dashboard → Redirect URIs
 
 ### Backend Connection Fails
 
-**Cause:** Device can't reach localhost.
+**Problem:** Cannot reach backend from device.
 
-**Solution:**
-- iOS Simulator: `localhost` works
+**Solutions:**
+- iOS Simulator: Use `localhost`
 - Android Emulator: Use `10.0.2.2` instead of `localhost`
-- Real Device: Use your machine's IP address or deploy backend
+- Real Device: Use ngrok or your machine's IP
 
-### Browser Doesn't Close After Auth
+### Browser Doesn't Close
 
-**Cause:** Browser plugin behavior varies by platform.
-
-**Solution:** This is expected. The browser may stay open, but your app should come to foreground and handle the callback. You can manually close the browser if needed, but the auth flow will complete.
+**Expected behavior.** The browser may stay open, but your app comes to foreground and handles the callback. You can close the browser manually if desired.
 
 ## Security Best Practices
 
-1. **Never store client secret in app** - Always exchange code on backend
-2. **Use secure storage** - Keychain (iOS) / Keystore (Android) for production
-3. **Validate state parameter** - Prevent CSRF attacks
-4. **Use short-lived access tokens** - Implement token refresh
-5. **Handle token expiration** - Refresh before making API calls
+1. **Never store client secret in app** - Keep it on backend
+2. **Use state parameter** - Prevent CSRF attacks
+3. **Implement token refresh** - Don't force re-authentication
+4. **Use secure storage in production** - Not Preferences
+5. **Validate tokens on backend** - Don't trust client tokens
+6. **Use HTTPS in production** - Protect token transmission
 
 ## Adapting for Your App
 
-To use this pattern in your own Capacitor app:
+To use this in your own Capacitor app:
 
-1. **Choose your URL scheme** (e.g., `myapp://`)
-2. **Update `capacitor.config.ts`** with your scheme
-3. **Copy `src/auth.ts`** and modify CONFIG
-4. **Run `cap sync`** to apply changes
-5. **Add to WorkOS Dashboard** redirect URIs
-6. **Test on simulator first**, then real device
+1. **Install Capacitor plugins:**
+   ```bash
+   npm install @capacitor/app @capacitor/browser @capacitor/preferences
+   ```
 
-The core logic in `src/auth.ts` is reusable - just update the configuration.
+2. **Copy `src/auth.ts` and `src/config.ts`**
 
-## Differences from Your Current Implementation
+3. **Update `capacitor.config.ts`:**
+   ```typescript
+   {
+     ios: { scheme: 'myapp' },
+     android: { scheme: 'myapp' }
+   }
+   ```
 
-If you wrote a "native plugin" for Capacitor, you might have overcomplicated it. The built-in Capacitor plugins handle everything:
+4. **Update WorkOS redirect URI:** `myapp://callback`
 
-- `@capacitor/browser` - Opens system browser
-- `@capacitor/app` - Listens for URL callbacks
-- `@capacitor/preferences` - Stores tokens
+5. **Register listener in your app:**
+   ```typescript
+   import { setupAuthListener } from './auth';
+   setupAuthListener();
+   ```
 
-You don't need a custom native plugin. Just use these three plugins.
+6. **Sync and run:**
+   ```bash
+   npx cap sync
+   ```
 
-## Next Steps
+## File Structure
 
-1. **Test this demo** to understand the flow
-2. **Adapt for your app** by changing the URL scheme
-3. **Implement RBAC** by calling `/auth/roles` endpoint
-4. **Add token refresh** before API calls
-5. **Use secure storage** in production
+```
+capacitor-app/
+├── src/
+│   ├── auth.ts          # OAuth implementation
+│   ├── config.ts        # Configuration
+│   └── main.ts          # App entry point
+├── capacitor.config.ts  # Capacitor configuration
+├── ios/                 # iOS native project
+├── android/             # Android native project
+└── dist/                # Built web assets
+```
 
-## Protocol Summary
+## Testing Checklist
 
-The OAuth protocol is identical across platforms. Only the implementation details differ:
+- [ ] Backend is running and accessible
+- [ ] WorkOS credentials are configured
+- [ ] Redirect URI added to WorkOS Dashboard
+- [ ] URL scheme matches in all configurations
+- [ ] Web assets built (`pnpm build`)
+- [ ] Native platforms synced (`pnpm sync`)
+- [ ] Can open browser and see WorkOS AuthKit
+- [ ] Can authenticate and receive callback
+- [ ] Tokens are stored correctly
+- [ ] Can use tokens with protected endpoints
 
-| Step | Protocol | Web | Capacitor |
-|------|----------|-----|-----------|
-| 1. Generate URL | Same | Same | Same |
-| 2. Open browser | Same URL | `window.location` | `Browser.open()` |
-| 3. Authenticate | Same | Same | Same |
-| 4. Redirect | Same URL | HTTP redirect | Custom scheme |
-| 5. Receive callback | Same params | Route handler | `App.addListener()` |
-| 6. Exchange code | Same API | Same | Same |
-| 7. Store tokens | Same tokens | Cookies | Secure storage |
+## Resources
 
-The HTTP requests (steps 1, 6) are identical. Only the browser interaction (steps 2, 4, 5) and storage (step 7) differ.
+- [Capacitor App API](https://capacitorjs.com/docs/apis/app) - URL handling
+- [Capacitor Browser API](https://capacitorjs.com/docs/apis/browser) - Opening browser
+- [Capacitor Preferences API](https://capacitorjs.com/docs/apis/preferences) - Storage
+- [WorkOS AuthKit](https://workos.com/docs/user-management/authkit) - Authentication
+- [RFC 8252: OAuth for Native Apps](https://www.rfc-editor.org/rfc/rfc8252) - OAuth specification
