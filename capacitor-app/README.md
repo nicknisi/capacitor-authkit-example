@@ -14,7 +14,9 @@ WorkOS AuthKit mobile OAuth demo using custom URL schemes.
 
 - `src/auth.ts` - OAuth implementation
 - `src/config.ts` - Backend URL configuration
-- `capacitor.config.ts` - URL scheme registration
+- `capacitor.config.ts` - App configuration
+- `ios/App/App/Info.plist` - iOS URL scheme config
+- `android/app/src/main/AndroidManifest.xml` - Android URL scheme config
 
 ## Running
 
@@ -69,7 +71,7 @@ const response = await fetch('/api/auth/callback', {
 
 ## Troubleshooting
 
-**Callback not received**: Run `pnpm sync` to register URL scheme
+**Callback not received**: Check that `workosauthdemo://` is configured in Info.plist (iOS) or AndroidManifest.xml (Android)
 
 **Invalid redirect_uri**: Add `workosauthdemo://callback` to WorkOS Dashboard
 
@@ -79,6 +81,6 @@ const response = await fetch('/api/auth/callback', {
 
 1. Install Capacitor plugins
 2. Copy `src/auth.ts` and `src/config.ts`
-3. Update URL scheme in `capacitor.config.ts`
-4. Add redirect URI to WorkOS
+3. Update URL scheme in Info.plist (iOS) and AndroidManifest.xml (Android)
+4. Add redirect URI to WorkOS Dashboard
 5. Run `cap sync`

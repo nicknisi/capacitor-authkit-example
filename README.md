@@ -27,16 +27,26 @@ pnpm dev:backend
 # Backend runs on http://localhost:3001
 ```
 
-**4. Run iOS app** (in new terminal)
+**4. Run the app** (in new terminal)
 ```bash
 pnpm ios
-# Opens Xcode - click ▶ to run
+# Builds, syncs, and opens Xcode - click ▶ to run
 ```
 
-**Or run Android app**
+**Or for Android** (first time: run `cap add android` to create android/ directory)
 ```bash
 pnpm android
-# Opens Android Studio - click ▶ to run
+# Builds, syncs, and opens Android Studio - click ▶ to run
+```
+
+**Note:** Android URL scheme must be configured manually in `android/app/src/main/AndroidManifest.xml`. Add this inside the main `<activity>` tag:
+```xml
+<intent-filter>
+  <action android:name="android.intent.action.VIEW" />
+  <category android:name="android.intent.category.DEFAULT" />
+  <category android:name="android.intent.category.BROWSABLE" />
+  <data android:scheme="workosauthdemo" />
+</intent-filter>
 ```
 
 ## Real Device Testing
@@ -84,5 +94,3 @@ pnpm sync:android     # Sync to Android
 **Invalid redirect_uri**: Add `workosauthdemo://callback` to WorkOS Dashboard
 
 **Backend connection fails on device**: Use ngrok or your machine's IP in `capacitor-app/src/config.ts`
-
-**iOS build errors**: Run `rm -rf capacitor-app/ios && pnpm -F capacitor-app exec cap add ios && pnpm sync:ios`

@@ -4,8 +4,6 @@ dist
 *.log
 
 # Capacitor
-ios/
-android/
 .capacitor/
 
 # Build outputs
