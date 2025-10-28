@@ -1,5 +1,3 @@
-// User Management Types
-
 export interface User {
   id: string;
   email: string;
@@ -59,8 +57,6 @@ export interface Impersonator {
   email: string;
   reason: string | null;
 }
-
-// Session Types
 
 export interface SessionData {
   accessToken: string;
