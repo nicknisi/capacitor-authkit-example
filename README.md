@@ -4,43 +4,39 @@ WorkOS AuthKit in a Capacitor mobile app with Next.js backend.
 
 ## Quick Start
 
+**1. Install dependencies**
 ```bash
-# Install
-git clone <your-repo>
-cd capacitor-authkit-example
 pnpm install
+```
 
-# Configure WorkOS
+**2. Configure WorkOS**
+
+Get credentials from [WorkOS Dashboard](https://dashboard.workos.com/):
+- Copy your Client ID and API Key
+- Add redirect URI: `workosauthdemo://callback`
+
+Create backend `.env`:
+```bash
 cp backend/.env.example backend/.env
-# Edit backend/.env with your WorkOS credentials
-
-# Run both apps
-pnpm dev
+# Edit backend/.env with your credentials
 ```
 
-Backend runs on `http://localhost:3001`, Capacitor app on `http://localhost:5173`.
-
-## WorkOS Setup
-
-1. Get credentials from [WorkOS Dashboard](https://dashboard.workos.com/)
-2. Add redirect URI: `workosauthdemo://callback`
-
-## Run on iOS
-
+**3. Run backend**
 ```bash
-pnpm -F capacitor-app build
-pnpm -F capacitor-app exec cap add ios  # First time only
-pnpm sync:ios
-pnpm -F capacitor-app open:ios
+pnpm dev:backend
+# Backend runs on http://localhost:3001
 ```
 
-## Run on Android
-
+**4. Run iOS app** (in new terminal)
 ```bash
-pnpm -F capacitor-app build
-pnpm -F capacitor-app exec cap add android  # First time only
-pnpm sync:android
-pnpm -F capacitor-app open:android
+pnpm ios
+# Opens Xcode - click ▶ to run
+```
+
+**Or run Android app**
+```bash
+pnpm android
+# Opens Android Studio - click ▶ to run
 ```
 
 ## Real Device Testing
@@ -74,28 +70,19 @@ capacitor-authkit-example/
 - Token refresh
 - Secure session storage
 
-## Scripts
+## Additional Scripts
 
 ```bash
-pnpm dev              # Run both apps
-pnpm build            # Build all
-pnpm sync             # Sync Capacitor
-pnpm sync:ios         # Sync iOS only
-pnpm sync:android     # Sync Android only
-```
-
-## Environment Variables
-
-Backend `.env`:
-```
-WORKOS_API_KEY=sk_test_...
-WORKOS_CLIENT_ID=client_...
+pnpm dev:backend      # Run backend only
+pnpm build:app        # Build app only
+pnpm sync:ios         # Sync to iOS
+pnpm sync:android     # Sync to Android
 ```
 
 ## Troubleshooting
 
 **Invalid redirect_uri**: Add `workosauthdemo://callback` to WorkOS Dashboard
 
-**Backend connection fails**: Use ngrok or machine IP for real devices
+**Backend connection fails on device**: Use ngrok or your machine's IP in `capacitor-app/src/config.ts`
 
-**iOS scheme error**: Run `rm -rf capacitor-app/ios && pnpm -F capacitor-app exec cap add ios`
+**iOS build errors**: Run `rm -rf capacitor-app/ios && pnpm -F capacitor-app exec cap add ios && pnpm sync:ios`
